@@ -1,19 +1,12 @@
 import { PostgresDatabaseAdapter } from "@ai16z/adapter-postgres";
 import { SqliteDatabaseAdapter } from "@ai16z/adapter-sqlite";
-import { DiscordClientInterface } from "@ai16z/client-discord";
-import { FarcasterAgentClient } from "@ai16z/client-farcaster";
-import { LensAgentClient } from "@ai16z/client-lens";
-import { SlackClientInterface } from "@ai16z/client-slack";
-import { TelegramClientInterface } from "@ai16z/client-telegram";
 import {
     AgentRuntime,
     CacheManager,
     Character,
-    Clients,
     DbCacheAdapter,
     defaultCharacter,
     elizaLogger,
-    FsCacheAdapter,
     IAgentRuntime,
     ICacheManager,
     IDatabaseAdapter,
@@ -189,93 +182,12 @@ export function getTokenForProvider(
                 character.settings?.secrets?.OPENAI_API_KEY ||
                 settings.OPENAI_API_KEY
             );
-        case ModelProviderName.ETERNALAI:
-            return (
-                character.settings?.secrets?.ETERNALAI_API_KEY ||
-                settings.ETERNALAI_API_KEY
-            );
-        case ModelProviderName.LLAMACLOUD:
-        case ModelProviderName.TOGETHER:
-            return (
-                character.settings?.secrets?.LLAMACLOUD_API_KEY ||
-                settings.LLAMACLOUD_API_KEY ||
-                character.settings?.secrets?.TOGETHER_API_KEY ||
-                settings.TOGETHER_API_KEY ||
-                character.settings?.secrets?.XAI_API_KEY ||
-                settings.XAI_API_KEY ||
-                character.settings?.secrets?.OPENAI_API_KEY ||
-                settings.OPENAI_API_KEY
-            );
         case ModelProviderName.ANTHROPIC:
             return (
                 character.settings?.secrets?.ANTHROPIC_API_KEY ||
                 character.settings?.secrets?.CLAUDE_API_KEY ||
                 settings.ANTHROPIC_API_KEY ||
                 settings.CLAUDE_API_KEY
-            );
-        case ModelProviderName.REDPILL:
-            return (
-                character.settings?.secrets?.REDPILL_API_KEY ||
-                settings.REDPILL_API_KEY
-            );
-        case ModelProviderName.OPENROUTER:
-            return (
-                character.settings?.secrets?.OPENROUTER ||
-                settings.OPENROUTER_API_KEY
-            );
-        case ModelProviderName.GROK:
-            return (
-                character.settings?.secrets?.GROK_API_KEY ||
-                settings.GROK_API_KEY
-            );
-        case ModelProviderName.HEURIST:
-            return (
-                character.settings?.secrets?.HEURIST_API_KEY ||
-                settings.HEURIST_API_KEY
-            );
-        case ModelProviderName.GROQ:
-            return (
-                character.settings?.secrets?.GROQ_API_KEY ||
-                settings.GROQ_API_KEY
-            );
-        case ModelProviderName.GALADRIEL:
-            return (
-                character.settings?.secrets?.GALADRIEL_API_KEY ||
-                settings.GALADRIEL_API_KEY
-            );
-        case ModelProviderName.FAL:
-            return (
-                character.settings?.secrets?.FAL_API_KEY || settings.FAL_API_KEY
-            );
-        case ModelProviderName.ALI_BAILIAN:
-            return (
-                character.settings?.secrets?.ALI_BAILIAN_API_KEY ||
-                settings.ALI_BAILIAN_API_KEY
-            );
-        case ModelProviderName.VOLENGINE:
-            return (
-                character.settings?.secrets?.VOLENGINE_API_KEY ||
-                settings.VOLENGINE_API_KEY
-            );
-        case ModelProviderName.NANOGPT:
-            return (
-                character.settings?.secrets?.NANOGPT_API_KEY ||
-                settings.NANOGPT_API_KEY
-            );
-        case ModelProviderName.HYPERBOLIC:
-            return (
-                character.settings?.secrets?.HYPERBOLIC_API_KEY ||
-                settings.HYPERBOLIC_API_KEY
-            );
-        case ModelProviderName.VENICE:
-            return (
-                character.settings?.secrets?.VENICE_API_KEY ||
-                settings.VENICE_API_KEY
-            );
-        case ModelProviderName.AKASH_CHAT_API:
-            return (
-                character.settings?.secrets?.AKASH_CHAT_API_KEY ||
-                settings.AKASH_CHAT_API_KEY
             );
     }
 }
@@ -359,7 +271,6 @@ export async function createAgent(
         modelProvider: character.modelProvider,
         evaluators: [],
         character,
-        // character.plugins are handled when clients are added
         plugins: [bootstrapPlugin, nodePlugin].filter(Boolean),
         providers: [],
         actions: [],

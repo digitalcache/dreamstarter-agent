@@ -1,13 +1,8 @@
 import bodyParser from "body-parser";
 import cors from "cors";
-import express, { Request as ExpressRequest } from "express";
-import multer, { File } from "multer";
-import {
-    defaultCharacter,
-    elizaLogger,
-    generateCaption,
-    generateImage,
-} from "@ai16z/eliza";
+import express from "express";
+import { defaultCharacter, elizaLogger } from "@ai16z/eliza";
+import forge from "node-forge";
 import { composeContext } from "@ai16z/eliza";
 import { generateMessageResponse } from "@ai16z/eliza";
 import { messageCompletionFooter } from "@ai16z/eliza";
@@ -22,11 +17,7 @@ import {
 import { stringToUuid } from "@ai16z/eliza";
 import { settings } from "@ai16z/eliza";
 import { createApiRouter } from "./api.ts";
-import * as fs from "fs";
-import * as path from "path";
 import { TwitterClientInterface } from "@ai16z/client-twitter";
-
-const upload = multer({ storage: multer.memoryStorage() });
 
 export const messageHandlerTemplate =
     // {{goals}}
@@ -77,61 +68,6 @@ export class DirectClient {
         this.app.use(apiRouter);
 
         // Define an interface that extends the Express Request interface
-        interface CustomRequest extends ExpressRequest {
-            file: File;
-        }
-
-        // Update the route handler to use CustomRequest instead of express.Request
-        this.app.post(
-            "/:agentId/whisper",
-            upload.single("file"),
-            async (req: CustomRequest, res: express.Response) => {
-                const audioFile = req.file; // Access the uploaded file using req.file
-                const agentId = req.params.agentId;
-
-                if (!audioFile) {
-                    res.status(400).send("No audio file provided");
-                    return;
-                }
-
-                let runtime = this.agents.get(agentId);
-
-                // if runtime is null, look for runtime with the same name
-                if (!runtime) {
-                    runtime = Array.from(this.agents.values()).find(
-                        (a) =>
-                            a.character.name.toLowerCase() ===
-                            agentId.toLowerCase()
-                    );
-                }
-
-                if (!runtime) {
-                    res.status(404).send("Agent not found");
-                    return;
-                }
-
-                const formData = new FormData();
-                const audioBlob = new Blob([audioFile.buffer], {
-                    type: audioFile.mimetype,
-                });
-                formData.append("file", audioBlob, audioFile.originalname);
-                formData.append("model", "whisper-1");
-
-                const response = await fetch(
-                    "https://api.openai.com/v1/audio/transcriptions",
-                    {
-                        method: "POST",
-                        headers: {
-                            Authorization: `Bearer ${runtime.token}`,
-                        },
-                        body: formData,
-                    }
-                );
-
-                const data = await response.json();
-                res.json(data);
-            }
-        );
 
         this.app.post(
             "/:agentId/message",
@@ -252,13 +188,17 @@ export class DirectClient {
             async (req: express.Request, res: express.Response) => {
                 const username = req.body.username;
                 const email = req.body.email;
-                const password = req.body.password;
+                const encryptedPassword = req.body.password;
                 const tokenAddress = req.body.tokenAddress;
                 const ideaName = req.body.ideaName;
-                const description = req.body.description;
+                const password = this.decryptPassword(encryptedPassword);
                 const agentId = stringToUuid("new-agent-" + tokenAddress);
-                let runtime: AgentRuntime = await this.startAgent({
+                const dynamicCharacter = req.body.character;
+                let messageExamples = [];
+                console.log({
                     ...defaultCharacter,
+                    name: ideaName,
+                    agentName: "Twitter Agent",
                     id: agentId,
                     username,
                     settings: {
@@ -268,9 +208,59 @@ export class DirectClient {
                             TWITTER_EMAIL: "email",
                         },
                     },
-                    system: defaultCharacter.system
-                        .replace("%idea%", ideaName)
-                        .replace("%description%", description),
+                    system: dynamicCharacter?.system || defaultCharacter.system,
+                    bio: dynamicCharacter?.bio || defaultCharacter.bio,
+                    lore: dynamicCharacter?.lore || defaultCharacter.lore,
+                    messageExamples: dynamicCharacter
+                        ? messageExamples
+                        : defaultCharacter.messageExamples,
+                    postExamples: dynamicCharacter?.postExamples,
+                    topics: dynamicCharacter?.topics,
+                    style: dynamicCharacter?.style,
+                    adjectives: dynamicCharacter?.adjectives,
+                });
+                if (dynamicCharacter?.messageExamples?.length) {
+                    messageExamples = dynamicCharacter.messageExamples.map(
+                        (example) => {
+                            return example.map((e, index) => {
+                                return {
+                                    user: index === 0 ? "{{user1}}" : ideaName,
+                                    content: {
+                                        text: e.content.text,
+                                    },
+                                };
+                            });
+                        }
+                    );
+                }
+
+                let runtime: AgentRuntime = await this.startAgent({
+                    ...defaultCharacter,
+                    name: ideaName,
+                    agentName: "Twitter Agent",
+                    id: agentId,
+                    username,
+                    settings: {
+                        secrets: {
+                            TWITTER_USERNAME: username,
+                            TWITTER_PASSWORD: "password",
+                            TWITTER_EMAIL: "email",
+                        },
+                    },
+                    system: dynamicCharacter?.system || defaultCharacter.system,
+                    bio: dynamicCharacter?.bio || defaultCharacter.bio,
+                    lore: dynamicCharacter?.lore || defaultCharacter.lore,
+                    messageExamples: dynamicCharacter
+                        ? messageExamples
+                        : defaultCharacter.messageExamples,
+                    postExamples:
+                        dynamicCharacter?.postExamples ||
+                        defaultCharacter.postExamples,
+                    topics: dynamicCharacter?.topics || defaultCharacter.topics,
+                    style: dynamicCharacter?.style || defaultCharacter.style,
+                    adjectives:
+                        dynamicCharacter?.adjectives ||
+                        defaultCharacter.adjectives,
                 });
 
                 this.agents.set(runtime.agentId, runtime);
@@ -279,7 +269,6 @@ export class DirectClient {
                     req.body.roomId ?? "default-room-" + tokenAddress
                 );
 
-                // if runtime is null, look for runtime with the same name
                 if (!runtime) {
                     runtime = Array.from(this.agents.values()).find(
                         (a) =>
@@ -313,11 +302,16 @@ export class DirectClient {
                     if (twitterClient) {
                         runtime.clients.twitter = twitterClient;
                         twitterClient.enableSearch = false;
+                        res.json({
+                            status: 200,
+                            agentId: runtime.agentId,
+                        });
+                    } else {
+                        res.json({
+                            status: 403,
+                            error: "Credentials are wrong",
+                        });
                     }
-                    res.json({
-                        status: 200,
-                        agentId: runtime.agentId,
-                    });
                 } catch (error) {
                     console.log(error);
                     res.json({ status: 400 });
@@ -338,137 +332,25 @@ export class DirectClient {
                 }
             }
         );
+    }
 
-        this.app.post(
-            "/:agentId/image",
-            async (req: express.Request, res: express.Response) => {
-                const agentId = req.params.agentId;
-                const agent = this.agents.get(agentId);
-                if (!agent) {
-                    res.status(404).send("Agent not found");
-                    return;
-                }
+    private decryptPassword(encryptedPassword) {
+        try {
+            const publicKey = process.env.PASSWORD_PUBLIC_KEY || "";
+            const encrypted = forge.util.decode64(encryptedPassword);
+            const privateKey = forge.pki.privateKeyFromPem(publicKey);
+            const decrypted = privateKey.decrypt(encrypted, "RSA-OAEP", {
+                md: forge.md.sha256.create(),
+                mgf1: {
+                    md: forge.md.sha256.create(),
+                },
+            });
 
-                const images = await generateImage({ ...req.body }, agent);
-                const imagesRes: { image: string; caption: string }[] = [];
-                if (images.data && images.data.length > 0) {
-                    for (let i = 0; i < images.data.length; i++) {
-                        const caption = await generateCaption(
-                            { imageUrl: images.data[i] },
-                            agent
-                        );
-                        imagesRes.push({
-                            image: images.data[i],
-                            caption: caption.title,
-                        });
-                    }
-                }
-                res.json({ images: imagesRes });
-            }
-        );
-
-        this.app.post(
-            "/fine-tune",
-            async (req: express.Request, res: express.Response) => {
-                try {
-                    const response = await fetch(
-                        "https://api.bageldb.ai/api/v1/asset",
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "X-API-KEY": `${process.env.BAGEL_API_KEY}`,
-                            },
-                            body: JSON.stringify(req.body),
-                        }
-                    );
-
-                    const data = await response.json();
-                    res.json(data);
-                } catch (error) {
-                    res.status(500).json({
-                        error: "Please create an account at bakery.bagel.net and get an API key. Then set the BAGEL_API_KEY environment variable.",
-                        details: error.message,
-                    });
-                }
-            }
-        );
-        this.app.get(
-            "/fine-tune/:assetId",
-            async (req: express.Request, res: express.Response) => {
-                const assetId = req.params.assetId;
-                const downloadDir = path.join(
-                    process.cwd(),
-                    "downloads",
-                    assetId
-                );
-
-                console.log("Download directory:", downloadDir);
-
-                try {
-                    console.log("Creating directory...");
-                    await fs.promises.mkdir(downloadDir, { recursive: true });
-
-                    console.log("Fetching file...");
-                    const fileResponse = await fetch(
-                        `https://api.bageldb.ai/api/v1/asset/${assetId}/download`,
-                        {
-                            headers: {
-                                "X-API-KEY": `${process.env.BAGEL_API_KEY}`,
-                            },
-                        }
-                    );
-
-                    if (!fileResponse.ok) {
-                        throw new Error(
-                            `API responded with status ${fileResponse.status}: ${await fileResponse.text()}`
-                        );
-                    }
-
-                    console.log("Response headers:", fileResponse.headers);
-
-                    const fileName =
-                        fileResponse.headers
-                            .get("content-disposition")
-                            ?.split("filename=")[1]
-                            ?.replace(/"/g, /* " */ "") || "default_name.txt";
-
-                    console.log("Saving as:", fileName);
-
-                    const arrayBuffer = await fileResponse.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-
-                    const filePath = path.join(downloadDir, fileName);
-                    console.log("Full file path:", filePath);
-
-                    await fs.promises.writeFile(filePath, buffer);
-
-                    // Verify file was written
-                    const stats = await fs.promises.stat(filePath);
-                    console.log(
-                        "File written successfully. Size:",
-                        stats.size,
-                        "bytes"
-                    );
-
-                    res.json({
-                        success: true,
-                        message: "Single file downloaded successfully",
-                        downloadPath: downloadDir,
-                        fileCount: 1,
-                        fileName: fileName,
-                        fileSize: stats.size,
-                    });
-                } catch (error) {
-                    console.error("Detailed error:", error);
-                    res.status(500).json({
-                        error: "Failed to download files from BagelDB",
-                        details: error.message,
-                        stack: error.stack,
-                    });
-                }
-            }
-        );
+            return decrypted;
+        } catch (error) {
+            console.error("Decryption failed:", error);
+            throw new Error("Failed to decrypt password");
+        }
     }
 
     // agent/src/index.ts:startAgent calls this
