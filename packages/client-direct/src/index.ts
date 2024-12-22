@@ -195,30 +195,6 @@ export class DirectClient {
                 const agentId = stringToUuid("new-agent-" + tokenAddress);
                 const dynamicCharacter = req.body.character;
                 let messageExamples = [];
-                console.log({
-                    ...defaultCharacter,
-                    name: ideaName,
-                    agentName: "Twitter Agent",
-                    id: agentId,
-                    username,
-                    settings: {
-                        secrets: {
-                            TWITTER_USERNAME: username,
-                            TWITTER_PASSWORD: "password",
-                            TWITTER_EMAIL: "email",
-                        },
-                    },
-                    system: dynamicCharacter?.system || defaultCharacter.system,
-                    bio: dynamicCharacter?.bio || defaultCharacter.bio,
-                    lore: dynamicCharacter?.lore || defaultCharacter.lore,
-                    messageExamples: dynamicCharacter
-                        ? messageExamples
-                        : defaultCharacter.messageExamples,
-                    postExamples: dynamicCharacter?.postExamples,
-                    topics: dynamicCharacter?.topics,
-                    style: dynamicCharacter?.style,
-                    adjectives: dynamicCharacter?.adjectives,
-                });
                 if (dynamicCharacter?.messageExamples?.length) {
                     messageExamples = dynamicCharacter.messageExamples.map(
                         (example) => {
@@ -237,7 +213,7 @@ export class DirectClient {
                 let runtime: AgentRuntime = await this.startAgent({
                     ...defaultCharacter,
                     name: ideaName,
-                    agentName: "Twitter Agent",
+                    agentName: `${ideaName} Agent`,
                     id: agentId,
                     username,
                     settings: {

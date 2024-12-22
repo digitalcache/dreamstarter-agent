@@ -337,7 +337,6 @@ export class ClientBase extends EventEmitter {
                 ) || [],
         }));
     }
-
     async fetchSearchTweets(
         query: string,
         maxTweets: number,
