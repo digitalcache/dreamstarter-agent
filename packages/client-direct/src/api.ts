@@ -1,7 +1,6 @@
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-
 import {
     AgentRuntime,
     elizaLogger,
@@ -12,13 +11,44 @@ import {
 import { REST, Routes } from "discord.js";
 import { DirectClient } from ".";
 
+const checkOrigin = (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+) => {
+    const origin = req.get("origin");
+    const host = req.get("host");
+
+    const isLocalhost =
+        origin === "http://localhost:3000" ||
+        host === "localhost:3000" ||
+        host?.includes("127.0.0.1:3000");
+
+    const isDreamstarter =
+        origin?.endsWith("dreamstarter.xyz") ||
+        host?.endsWith("dreamstarter.xyz");
+
+    if (isLocalhost || isDreamstarter) {
+        next();
+    } else {
+        res.status(403).json({
+            error: "Access forbidden - Invalid origin",
+        });
+    }
+};
+
 export function createApiRouter(
     agents: Map<string, AgentRuntime>,
     directClient: DirectClient
 ) {
     const router = express.Router();
 
-    router.use(cors());
+    const corsOptions = {
+        origin: ["http://localhost:3000", /\.dreamstarter\.xyz$/],
+        optionsSuccessStatus: 200,
+    };
+
+    router.use(cors(corsOptions));
     router.use(bodyParser.json());
     router.use(bodyParser.urlencoded({ extended: true }));
     router.use(
@@ -27,7 +57,11 @@ export function createApiRouter(
         })
     );
 
+    router.use(checkOrigin);
+
     router.get("/", (req, res) => {
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("X-Frame-Options", "DENY");
         res.send("Welcome to REST API of DreamStarter");
     });
 
