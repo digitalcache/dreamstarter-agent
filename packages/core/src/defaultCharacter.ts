@@ -6,6 +6,9 @@ export const defaultCharacter: Character = {
     clients: [Clients.TWITTER],
     modelProvider: ModelProviderName.ANTHROPIC,
     settings: {
+        modelConfig: {
+            // maxInputTokens: 10000,
+        },
         secrets: {},
         voice: {
             model: "en_US-hfc_female-medium",
