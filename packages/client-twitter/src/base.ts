@@ -156,7 +156,6 @@ export class ClientBase extends EventEmitter {
     }
 
     async init(email, username, password) {
-        console.log("init", this.twitterConfig);
         let retries = this.twitterConfig.TWITTER_RETRY_LIMIT;
         const twitter2faSecret = this.twitterConfig.TWITTER_2FA_SECRET;
 
@@ -197,7 +196,10 @@ export class ClientBase extends EventEmitter {
                     }
                 }
             } catch (error) {
-                elizaLogger.error(`Login attempt failed: ${error.message}`);
+                console.log(error);
+                elizaLogger.error(
+                    `Invalid credentials. Please check your email, username and password.`
+                );
             }
 
             retries--;

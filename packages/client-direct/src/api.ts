@@ -26,7 +26,9 @@ const checkOrigin = (
 
     const isDreamstarter =
         origin?.endsWith("dreamstarter.xyz") ||
-        host?.endsWith("dreamstarter.xyz");
+        host?.endsWith("dreamstarter.xyz") ||
+        origin?.endsWith("dreamstarter.vercel.app") ||
+        host?.endsWith("dreamstarter.vercel.app");
 
     if (isLocalhost || isDreamstarter) {
         next();
@@ -44,7 +46,11 @@ export function createApiRouter(
     const router = express.Router();
 
     const corsOptions = {
-        origin: ["http://localhost:3000", /\.dreamstarter\.xyz$/],
+        origin: [
+            "http://localhost:3000",
+            /\.dreamstarter\.xyz$/,
+            /\.dreamstarter\.vercel\.app$/,
+        ],
         optionsSuccessStatus: 200,
     };
 
@@ -96,10 +102,7 @@ export function createApiRouter(
 
         // update character
         if (agent) {
-            // stop agent
-            agent.stop();
             directClient.unregisterAgent(agent);
-            // if it has a different name, the agentId will change
         }
 
         // load character from body

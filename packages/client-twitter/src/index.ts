@@ -54,7 +54,6 @@ export const TwitterClientInterface: TwitterClient = {
         elizaLogger.log("Twitter client started");
         const twitterConfig: TwitterConfig =
             await validateTwitterConfig(runtime);
-        console.log("here", twitterConfig);
         const manager = new TwitterManager(runtime, twitterConfig);
 
         await manager.client.init(email, username, password);

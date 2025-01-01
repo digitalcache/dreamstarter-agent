@@ -106,7 +106,6 @@ export class TwitterPostClient {
         this.client = client;
         this.runtime = runtime;
         this.twitterUsername = this.runtime.getSetting("TWITTER_USERNAME");
-        console.log("here2", this.client.twitterConfig);
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
 
         // Log configuration on initialization

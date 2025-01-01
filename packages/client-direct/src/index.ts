@@ -718,19 +718,18 @@ export class DirectClient {
                     if (twitterClient) {
                         runtime.clients.twitter = twitterClient;
                         twitterClient.enableSearch = false;
-                        res.json({
-                            status: 200,
+                        res.status(200).json({
+                            success: true,
                             agentId: runtime.agentId,
-                        });
-                    } else {
-                        res.json({
-                            status: 403,
-                            error: "Credentials are wrong",
                         });
                     }
                 } catch (error) {
                     console.log(error);
-                    res.json({ status: 400 });
+                    res.status(403).json({
+                        success: false,
+                        message:
+                            "Failed to start client. Check your credentials.",
+                    });
                 }
             }
         );
@@ -741,10 +740,10 @@ export class DirectClient {
                 const agentId = req.params.agentId;
                 try {
                     this.unregisterAgent(this.agents.get(agentId));
-                    res.json({ status: 200 });
+                    res.status(200).json({ success: true });
                 } catch (error) {
                     console.log(error);
-                    res.json({ status: 400 });
+                    res.status(400).json({ success: false });
                 }
             }
         );
