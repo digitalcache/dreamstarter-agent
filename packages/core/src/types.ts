@@ -808,6 +808,8 @@ export type Character = {
         bio: string;
         nicknames?: string[];
     };
+    /** Optional Twitter Query */
+    twitterQuery?: string;
     /** Optional NFT prompt */
     nft?: {
         prompt: string;

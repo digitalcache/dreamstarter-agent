@@ -11,6 +11,7 @@ import {
 } from "@elizaos/core";
 import {
     QueryTweetsResponse,
+    QueryProfilesResponse,
     Scraper,
     SearchMode,
     Tweet,
@@ -385,6 +386,50 @@ export class ClientBase extends EventEmitter {
         } catch (error) {
             elizaLogger.error("Error fetching search tweets:", error);
             return { tweets: [] };
+        }
+    }
+
+    async fetchSearchProfiles(
+        query: string,
+        maxProfiles: number,
+        cursor?: string
+    ): Promise<QueryProfilesResponse> {
+        try {
+            // Sometimes this fails because we are rate limited. in this case, we just need to return an empty array
+            // if we dont get a response in 5 seconds, something is wrong
+            const timeoutPromise = new Promise((resolve) =>
+                setTimeout(() => resolve({ profiles: [] }), 10000)
+            );
+            let followersCount = 0;
+            try {
+                const userProfile = await this.twitterClient.getProfile(
+                    this.profile.username
+                );
+                followersCount = userProfile.followersCount;
+            } catch (error) {
+                elizaLogger.error("Error fetching profile:", error);
+            }
+            if (followersCount < 1000) {
+                try {
+                    const result = await Promise.race([
+                        this.twitterClient.fetchSearchProfiles(
+                            query,
+                            maxProfiles,
+                            cursor
+                        ),
+                        timeoutPromise,
+                    ]);
+                    return (result ?? {
+                        profiles: [],
+                    }) as QueryProfilesResponse;
+                } catch (error) {
+                    elizaLogger.error("Error fetching search profiles:", error);
+                    return { profiles: [] };
+                }
+            }
+        } catch (error) {
+            elizaLogger.error("Error fetching search profiles:", error);
+            return { profiles: [] };
         }
     }
 

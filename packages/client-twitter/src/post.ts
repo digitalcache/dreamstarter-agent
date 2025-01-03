@@ -97,6 +97,10 @@ export class TwitterPostClient {
     client: ClientBase;
     runtime: IAgentRuntime;
     twitterUsername: string;
+    numTweets: number;
+    numLikes: number;
+    numReplies: number;
+    numRetweets: number;
     private isProcessing: boolean = false;
     private lastProcessTime: number = 0;
     private stopProcessingActions: boolean = false;
@@ -105,6 +109,10 @@ export class TwitterPostClient {
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
         this.runtime = runtime;
+        this.numTweets = 0;
+        this.numLikes = 0;
+        this.numReplies = 0;
+        this.numRetweets = 0;
         this.twitterUsername = this.runtime.getSetting("TWITTER_USERNAME");
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
 
@@ -391,6 +399,7 @@ export class TwitterPostClient {
                 roomId,
                 newTweetContent
             );
+            this.numTweets++;
         } catch (error) {
             elizaLogger.error("Error sending tweet:", error);
         }
@@ -690,6 +699,7 @@ export class TwitterPostClient {
                                 );
                                 executedActions.push("like");
                                 elizaLogger.log(`Liked tweet ${tweet.id}`);
+                                this.numLikes++;
                             }
                         } catch (error) {
                             elizaLogger.error(
@@ -712,6 +722,7 @@ export class TwitterPostClient {
                                 );
                                 executedActions.push("retweet");
                                 elizaLogger.log(`Retweeted tweet ${tweet.id}`);
+                                this.numRetweets++;
                             }
                         } catch (error) {
                             elizaLogger.error(
@@ -1052,6 +1063,7 @@ export class TwitterPostClient {
                     `twitter/reply_generation_${tweet.id}.txt`,
                     `Context:\n${enrichedState}\n\nGenerated Reply:\n${replyText}`
                 );
+                this.numReplies++;
             } else {
                 elizaLogger.error("Tweet reply creation failed");
             }

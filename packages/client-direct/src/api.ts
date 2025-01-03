@@ -80,7 +80,7 @@ export function createApiRouter(
         res.json({ agents: agentsList });
     });
 
-    router.get("/agents/:agentId", (req, res) => {
+    router.get("/agents/:agentId", async (req, res) => {
         const agentId = req.params.agentId;
         const agent = agents.get(agentId);
 
@@ -88,10 +88,16 @@ export function createApiRouter(
             res.status(404).json({ error: "Agent not found" });
             return;
         }
-
+        const twitterClient = agent.clients["twitter"];
         res.json({
             id: agent.agentId,
             character: agent.character,
+            numTweets: twitterClient?.post?.numTweets || 0,
+            numLikes: twitterClient?.post?.numLikes || 0,
+            numRetweets: twitterClient?.post?.numRetweets || 0,
+            numReplies:
+                (twitterClient?.post?.numReplies || 0) +
+                (twitterClient?.interaction?.numReplies || 0),
         });
     });
 

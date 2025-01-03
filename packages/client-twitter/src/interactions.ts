@@ -90,9 +90,11 @@ Thread of Tweets You Are Replying To:
 export class TwitterInteractionClient {
     client: ClientBase;
     runtime: IAgentRuntime;
+    numReplies: number;
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
         this.runtime = runtime;
+        this.numReplies = 0;
     }
 
     async start() {
@@ -378,6 +380,18 @@ export class TwitterInteractionClient {
             return;
         }
 
+        if (tweet.username) {
+            try {
+                await this.client.twitterClient.followUser(tweet.username);
+                elizaLogger.log(`Followed user @${tweet.username}`);
+            } catch (error) {
+                elizaLogger.error(
+                    `Error following user @${tweet.username}:`,
+                    error
+                );
+            }
+        }
+
         if (!message.content.text) {
             elizaLogger.log("Skipping Tweet with no text", tweet.id);
             return { text: "", action: "IGNORE" };
@@ -543,6 +557,7 @@ export class TwitterInteractionClient {
                     `twitter/tweet_generation_${tweet.id}.txt`,
                     responseInfo
                 );
+                this.numReplies++;
                 await wait();
             } catch (error) {
                 elizaLogger.error(`Error sending response tweet: ${error}`);

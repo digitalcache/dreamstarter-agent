@@ -649,11 +649,13 @@ export class DirectClient {
                         }
                     );
                 }
-
                 let runtime: AgentRuntime = await this.startAgent({
                     ...defaultCharacter,
                     name: ideaName,
                     agentName: `${ideaName} Agent`,
+                    twitterQuery: dynamicCharacter
+                        ? dynamicCharacter.twitterQuery.join(" ")
+                        : "",
                     id: agentId,
                     username,
                     settings: {
@@ -682,9 +684,8 @@ export class DirectClient {
                 this.agents.set(runtime.agentId, runtime);
 
                 const roomId = stringToUuid(
-                    req.body.roomId ?? "default-room-" + tokenAddress
+                    req.body.roomId ?? "default-room-" + agentId
                 );
-
                 if (!runtime) {
                     runtime = Array.from(this.agents.values()).find(
                         (a) =>
@@ -714,10 +715,8 @@ export class DirectClient {
                             username,
                             password
                         );
-
                     if (twitterClient) {
                         runtime.clients.twitter = twitterClient;
-                        twitterClient.enableSearch = false;
                         res.status(200).json({
                             success: true,
                             agentId: runtime.agentId,
