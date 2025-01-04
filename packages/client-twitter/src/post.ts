@@ -44,20 +44,29 @@ export const twitterActionTemplate =
 {{postDirections}}
 
 Guidelines:
-- Highly selective engagement
-- Direct mentions are priority
-- Skip: low-effort content, off-topic, repetitive
+- Extremely selective engagement
+- Direct mentions require careful evaluation
+- Skip: low-effort content, off-topic, repetitive, trending topics
+- Maximum 1 action per tweet
+- Daily engagement cap recommended
 
-Actions (respond only with tags):
-[LIKE] - Resonates with interests (9.5/10)
-[RETWEET] - Perfect character alignment (9/10)
-[QUOTE] - Can add unique value (8/10)
-[REPLY] - Memetic opportunity (9/10)
+Qualifying Criteria:
+[LIKE] - Must uniquely align with core interests (8.5/10)
+[RETWEET] - Must exemplify character values AND add value to followers (9/10)
+[QUOTE] - Must enable substantial, unique perspective (9.5/10)
+[REPLY] - Must create meaningful dialogue opportunity (9/10)
+
+Disqualifying Factors:
+- Generic content or common perspectives
+- Already widely discussed topics
+- Purely reactive or emotional content
+- Limited potential for meaningful interaction
 
 Tweet:
 {{currentTweet}}
 
-# Respond with qualifying action tags only.` + postActionResponseFooter;
+# Respond with single most appropriate action tag, if any.` +
+    postActionResponseFooter;
 
 /**
  * Truncate text to fit within the Twitter character limit, ensuring it ends at a complete sentence.
