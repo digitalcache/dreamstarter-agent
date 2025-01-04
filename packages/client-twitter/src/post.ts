@@ -105,6 +105,9 @@ export class TwitterPostClient {
     private lastProcessTime: number = 0;
     private stopProcessingActions: boolean = false;
     private isDryRun: boolean;
+    enableActionProcessing: boolean;
+    enableScheduledPosts: boolean;
+    private tweetGenerationTimeoutId: NodeJS.Timeout | null;
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
@@ -113,8 +116,11 @@ export class TwitterPostClient {
         this.numLikes = 0;
         this.numReplies = 0;
         this.numRetweets = 0;
+        this.enableActionProcessing = false;
         this.twitterUsername = this.runtime.getSetting("TWITTER_USERNAME");
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
+        this.tweetGenerationTimeoutId = null;
+        this.enableScheduledPosts = true;
 
         // Log configuration on initialization
         elizaLogger.log("Twitter Client Configuration:");
@@ -126,7 +132,7 @@ export class TwitterPostClient {
             `- Post Interval: ${this.client.twitterConfig.POST_INTERVAL_MIN}-${this.client.twitterConfig.POST_INTERVAL_MAX} minutes`
         );
         elizaLogger.log(
-            `- Action Processing: ${this.client.twitterConfig.ENABLE_ACTION_PROCESSING ? "enabled" : "disabled"}`
+            `- Action Processing: ${this.enableActionProcessing ? "enabled" : "disabled"}`
         );
         elizaLogger.log(
             `- Action Interval: ${this.client.twitterConfig.ACTION_INTERVAL} seconds`
@@ -156,6 +162,9 @@ export class TwitterPostClient {
         // }
 
         const generateNewTweetLoop = async () => {
+            if (!this.enableScheduledPosts) {
+                return;
+            }
             const lastPost = await this.runtime.cacheManager.get<{
                 timestamp: number;
             }>("twitter/" + this.twitterUsername + "/lastPost");
@@ -172,39 +181,11 @@ export class TwitterPostClient {
                 await this.generateNewTweet();
             }
 
-            setTimeout(() => {
+            this.tweetGenerationTimeoutId = setTimeout(() => {
                 generateNewTweetLoop(); // Set up next iteration
             }, delay);
 
             elizaLogger.log(`Next tweet scheduled in ${randomMinutes} minutes`);
-        };
-
-        const processActionsLoop = async () => {
-            const actionInterval = this.client.twitterConfig.ACTION_INTERVAL; // Defaults to 5 minutes
-
-            while (!this.stopProcessingActions) {
-                try {
-                    const results = await this.processTweetActions();
-                    if (results) {
-                        elizaLogger.log(`Processed ${results.length} tweets`);
-                        elizaLogger.log(
-                            `Next action processing scheduled in ${actionInterval / 1000} seconds`
-                        );
-                        // Wait for the full interval before next processing
-                        await new Promise(
-                            (resolve) =>
-                                setTimeout(resolve, actionInterval * 60 * 1000) // now in minutes
-                        );
-                    }
-                } catch (error) {
-                    elizaLogger.error(
-                        "Error in action processing loop:",
-                        error
-                    );
-                    // Add exponential backoff on error
-                    await new Promise((resolve) => setTimeout(resolve, 30000)); // Wait 30s on error
-                }
-            }
         };
 
         if (this.client.twitterConfig.POST_IMMEDIATELY) {
@@ -218,11 +199,45 @@ export class TwitterPostClient {
         } else {
             elizaLogger.log("Tweet generation loop disabled (dry run mode)");
         }
+    }
 
-        if (
-            this.client.twitterConfig.ENABLE_ACTION_PROCESSING &&
-            !this.isDryRun
-        ) {
+    async stopNewTweets() {
+        // Stop tweet generation loop
+        if (this.tweetGenerationTimeoutId) {
+            clearTimeout(this.tweetGenerationTimeoutId);
+            this.tweetGenerationTimeoutId = null;
+            elizaLogger.log("Tweet generation loop stopped");
+        }
+    }
+
+    startProcessingActions() {
+        const processActionsLoop = async () => {
+            const actionInterval = this.client.twitterConfig.ACTION_INTERVAL; // Defaults to 5 minutes
+
+            while (!this.stopProcessingActions) {
+                try {
+                    const results = await this.processTweetActions();
+                    if (results) {
+                        elizaLogger.log(`Processed ${results.length} tweets`);
+                        elizaLogger.log(
+                            `Next action processing scheduled in ${actionInterval / 1000} seconds`
+                        );
+                        // Wait for the full interval before next processing
+                        await new Promise(
+                            (resolve) => setTimeout(resolve, actionInterval) // now in ms
+                        );
+                    }
+                } catch (error) {
+                    elizaLogger.error(
+                        "Error in action processing loop:",
+                        error
+                    );
+                    // Add exponential backoff on error
+                    await new Promise((resolve) => setTimeout(resolve, 30000)); // Wait 30s on error
+                }
+            }
+        };
+        if (this.enableActionProcessing && !this.isDryRun) {
             processActionsLoop().catch((error) => {
                 elizaLogger.error(
                     "Fatal error in process actions loop:",
@@ -241,7 +256,6 @@ export class TwitterPostClient {
             }
         }
     }
-
     createTweetObject(
         tweetResult: any,
         client: any,
@@ -1073,6 +1087,8 @@ export class TwitterPostClient {
     }
 
     async stop() {
+        // Stop action processing
+        elizaLogger.log("Action processing stopped");
         this.stopProcessingActions = true;
     }
 }

@@ -20,15 +20,10 @@ const checkOrigin = (
     const host = req.get("host");
 
     const isLocalhost =
-        origin === "http://localhost:3000" ||
-        host === "localhost:3000" ||
-        host?.includes("127.0.0.1:3000");
-
+        origin === "http://localhost:3000" || host === "localhost:8000";
     const isDreamstarter =
         origin?.endsWith("dreamstarter.xyz") ||
-        host?.endsWith("dreamstarter.xyz") ||
-        origin?.endsWith("dreamstarter.vercel.app") ||
-        host?.endsWith("dreamstarter.vercel.app");
+        origin?.endsWith("dreamstarter.vercel.app");
 
     if (isLocalhost || isDreamstarter) {
         next();
@@ -72,6 +67,8 @@ export function createApiRouter(
     });
 
     router.get("/agents", (req, res) => {
+        console.log(directClient[""]);
+
         const agentsList = Array.from(agents.values()).map((agent) => ({
             id: agent.agentId,
             name: agent.character.name,
@@ -91,28 +88,39 @@ export function createApiRouter(
         const twitterClient = agent.clients["twitter"];
         res.json({
             id: agent.agentId,
-            character: agent.character,
-            numTweets: twitterClient?.post?.numTweets || 0,
-            numLikes: twitterClient?.post?.numLikes || 0,
-            numRetweets: twitterClient?.post?.numRetweets || 0,
-            numReplies:
-                (twitterClient?.post?.numReplies || 0) +
-                (twitterClient?.interaction?.numReplies || 0),
+            character: {
+                ...agent.character,
+                twitterQuery: agent?.character?.twitterQuery.split(" ") || [],
+            },
+            twitter: {
+                processionActions:
+                    twitterClient?.post?.enableActionProcessing || false,
+                schedulingPosts:
+                    twitterClient?.post?.enableScheduledPosts || false,
+                followProfiles: twitterClient?.search?.enableFollow || false,
+                numTweets: twitterClient?.post?.numTweets || 0,
+                numLikes: twitterClient?.post?.numLikes || 0,
+                numRetweets: twitterClient?.post?.numRetweets || 0,
+                numFollowed: twitterClient?.search?.numFollowed || 0,
+                numReplies:
+                    (twitterClient?.post?.numReplies || 0) +
+                    (twitterClient?.interaction?.numReplies || 0),
+            },
         });
     });
 
     router.post("/agents/:agentId/set", async (req, res) => {
         const agentId = req.params.agentId;
-        console.log("agentId", agentId);
-        let agent: AgentRuntime = agents.get(agentId);
+        const schedulingPosts = req.body.schedulingPosts;
+        const followProfiles = req.body.followProfiles;
+        const processionActions = req.body.processionActions;
 
-        // update character
-        if (agent) {
-            directClient.unregisterAgent(agent);
-        }
+        const agent: AgentRuntime = agents.get(agentId);
+
+        const twitterManager = agent.clients["twitter"];
 
         // load character from body
-        const character = req.body;
+        const character = req.body.character;
         try {
             validateCharacterConfig(character);
         } catch (e) {
@@ -124,9 +132,32 @@ export function createApiRouter(
             return;
         }
 
-        // start it up (and register it)
-        agent = await directClient.startAgent(character);
-        elizaLogger.log(`${character.name} started`);
+        if (twitterManager) {
+            if (twitterManager.search.enableFollow !== followProfiles) {
+                twitterManager.search.enableFollow = followProfiles;
+                await twitterManager.search[
+                    followProfiles ? "start" : "stop"
+                ]();
+            }
+
+            if (
+                twitterManager.post.enableActionProcessing !== processionActions
+            ) {
+                twitterManager.post.enableActionProcessing = processionActions;
+                await twitterManager.post[
+                    processionActions ? "startProcessingActions" : "stop"
+                ]();
+            }
+
+            if (twitterManager.post.enableScheduledPosts !== schedulingPosts) {
+                twitterManager.post.enableScheduledPosts = schedulingPosts;
+                await twitterManager.post[
+                    schedulingPosts ? "start" : "stopNewTweets"
+                ]();
+            }
+
+            elizaLogger.log(`${character.name} started`);
+        }
 
         res.json({
             id: character.id,

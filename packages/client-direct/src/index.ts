@@ -738,6 +738,8 @@ export class DirectClient {
             async (req: express.Request, res: express.Response) => {
                 const agentId = req.params.agentId;
                 try {
+                    const runtime: AgentRuntime = this.agents.get(agentId);
+                    await TwitterClientInterface.stop(runtime);
                     this.unregisterAgent(this.agents.get(agentId));
                     res.status(200).json({ success: true });
                 } catch (error) {

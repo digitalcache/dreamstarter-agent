@@ -91,16 +91,19 @@ export class TwitterInteractionClient {
     client: ClientBase;
     runtime: IAgentRuntime;
     numReplies: number;
+    private tweetInteractionTimeoutId: NodeJS.Timeout | null;
+
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
         this.runtime = runtime;
         this.numReplies = 0;
+        this.tweetInteractionTimeoutId = null;
     }
 
     async start() {
         const handleTwitterInteractionsLoop = () => {
             this.handleTwitterInteractions();
-            setTimeout(
+            this.tweetInteractionTimeoutId = setTimeout(
                 handleTwitterInteractionsLoop,
                 // Defaults to 2 minutes
                 this.client.twitterConfig.TWITTER_POLL_INTERVAL * 1000
@@ -108,7 +111,13 @@ export class TwitterInteractionClient {
         };
         handleTwitterInteractionsLoop();
     }
-
+    async stop() {
+        if (this.tweetInteractionTimeoutId) {
+            clearTimeout(this.tweetInteractionTimeoutId);
+            this.tweetInteractionTimeoutId = null;
+            elizaLogger.log("Interactions stopped");
+        }
+    }
     async handleTwitterInteractions() {
         elizaLogger.log("Checking Twitter interactions");
 

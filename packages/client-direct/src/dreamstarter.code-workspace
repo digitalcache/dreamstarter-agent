@@ -1,11 +1,11 @@
 {
-	"folders": [
-		{
-			"path": "../../../../dreamstarter"
-		},
-		{
-			"path": "../../.."
-		}
-	],
-	"settings": {}
+    "folders": [
+        {
+            "path": "../../../../dreamstarter"
+        },
+        {
+            "path": "../../.."
+        }
+    ],
+    "settings": {}
 }

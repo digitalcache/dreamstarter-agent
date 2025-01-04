@@ -13,17 +13,7 @@ class TwitterManager {
     constructor(runtime: IAgentRuntime, twitterConfig: TwitterConfig) {
         this.client = new ClientBase(runtime, twitterConfig);
         this.post = new TwitterPostClient(this.client, runtime);
-
-        if (twitterConfig.TWITTER_SEARCH_ENABLE) {
-            // this searches topics from character file
-            elizaLogger.warn("Twitter/X client running in a mode that:");
-            elizaLogger.warn("1. violates consent of random users");
-            elizaLogger.warn("2. burns your rate limit");
-            elizaLogger.warn("3. can get your account banned");
-            elizaLogger.warn("use at your own risk");
-            this.search = new TwitterSearchClient(this.client, runtime);
-        }
-
+        this.search = new TwitterSearchClient(this.client, runtime);
         this.interaction = new TwitterInteractionClient(this.client, runtime);
     }
 }
@@ -86,7 +76,15 @@ export const TwitterClientInterface: TwitterClient = {
         // return manager;
     },
     async stop(_runtime: IAgentRuntime) {
-        elizaLogger.warn("Twitter client does not support stopping yet");
+        const xClient = _runtime.clients.twitter as TwitterManager;
+        if (xClient) {
+            elizaLogger.log("Twitter client trying to stop");
+            await xClient.post.stop();
+            await xClient.post.stopNewTweets();
+            await xClient.interaction.stop();
+            if (xClient.search) await xClient.search.stop();
+            return xClient;
+        }
     },
 };
 
