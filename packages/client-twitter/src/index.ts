@@ -52,7 +52,7 @@ export const TwitterClientInterface: TwitterClient = {
 
         await manager.interaction.start();
 
-        if (manager.search) await manager.search.start();
+        // await manager.search.start();
 
         return manager;
     },
@@ -82,7 +82,7 @@ export const TwitterClientInterface: TwitterClient = {
             await xClient.post.stop();
             await xClient.post.stopNewTweets();
             await xClient.interaction.stop();
-            if (xClient.search) await xClient.search.stop();
+            await xClient.search.stop();
             return xClient;
         }
     },

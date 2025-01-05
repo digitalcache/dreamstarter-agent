@@ -559,7 +559,6 @@ export class ClientBase extends EventEmitter {
                 return;
             }
         }
-
         const timeline = await this.fetchHomeTimeline(cachedTimeline ? 10 : 50);
         const username = this.runtime.getSetting("TWITTER_USERNAME");
 

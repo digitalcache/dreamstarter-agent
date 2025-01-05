@@ -42,31 +42,21 @@ export const twitterActionTemplate =
 # INSTRUCTIONS: Determine actions for {{agentName}} (@{{twitterUserName}}) based on:
 {{bio}}
 {{postDirections}}
-
 Guidelines:
-- Extremely selective engagement
-- Direct mentions require careful evaluation
-- Skip: low-effort content, off-topic, repetitive, trending topics
-- Maximum 1 action per tweet
-- Daily engagement cap recommended
+- Highly selective engagement
+- Direct mentions are priority
+- Skip: low-effort content, off-topic, repetitive
 
-Qualifying Criteria:
-[LIKE] - Must uniquely align with core interests (8.5/10)
-[RETWEET] - Must exemplify character values AND add value to followers (9/10)
-[QUOTE] - Must enable substantial, unique perspective (9.5/10)
-[REPLY] - Must create meaningful dialogue opportunity (9/10)
-
-Disqualifying Factors:
-- Generic content or common perspectives
-- Already widely discussed topics
-- Purely reactive or emotional content
-- Limited potential for meaningful interaction
+Actions (respond only with tags):
+[LIKE] - Resonates with interests (9.5/10)
+[RETWEET] - Perfect character alignment (9/10)
+[QUOTE] - Can add unique value (8/10)
+[REPLY] - Memetic opportunity (9/10)
 
 Tweet:
 {{currentTweet}}
 
-# Respond with single most appropriate action tag, if any.` +
-    postActionResponseFooter;
+# Respond with qualifying action tags only.` + postActionResponseFooter;
 
 /**
  * Truncate text to fit within the Twitter character limit, ensuring it ends at a complete sentence.
@@ -112,7 +102,6 @@ export class TwitterPostClient {
     numRetweets: number;
     private isProcessing: boolean = false;
     private lastProcessTime: number = 0;
-    private stopProcessingActions: boolean = false;
     private isDryRun: boolean;
     enableActionProcessing: boolean;
     enableScheduledPosts: boolean;
@@ -220,10 +209,10 @@ export class TwitterPostClient {
     }
 
     startProcessingActions() {
+        this.enableActionProcessing = true;
         const processActionsLoop = async () => {
             const actionInterval = this.client.twitterConfig.ACTION_INTERVAL; // Defaults to 5 minutes
-
-            while (!this.stopProcessingActions) {
+            while (this.enableActionProcessing) {
                 try {
                     const results = await this.processTweetActions();
                     if (results) {
@@ -246,7 +235,7 @@ export class TwitterPostClient {
                 }
             }
         };
-        if (this.enableActionProcessing && !this.isDryRun) {
+        if (!this.isDryRun) {
             processActionsLoop().catch((error) => {
                 elizaLogger.error(
                     "Fatal error in process actions loop:",
@@ -265,6 +254,13 @@ export class TwitterPostClient {
             }
         }
     }
+
+    async stop() {
+        // Stop action processing
+        elizaLogger.log("Action processing stopped");
+        this.enableActionProcessing = false;
+    }
+
     createTweetObject(
         tweetResult: any,
         client: any,
@@ -627,12 +623,12 @@ export class TwitterPostClient {
      * Processes tweet actions (likes, retweets, quotes, replies). If isDryRun is true,
      * only simulates and logs actions without making API calls.
      */
+
     private async processTweetActions() {
         if (this.isProcessing) {
             elizaLogger.log("Already processing tweet actions, skipping");
             return null;
         }
-
         try {
             this.isProcessing = true;
             this.lastProcessTime = Date.now();
@@ -655,6 +651,10 @@ export class TwitterPostClient {
             const results = [];
 
             for (const tweet of homeTimeline) {
+                if (!this.enableActionProcessing) {
+                    elizaLogger.log("Action processing disabled, skipping");
+                    break;
+                }
                 try {
                     // Skip if we've already processed this tweet
                     const memory =
@@ -665,6 +665,11 @@ export class TwitterPostClient {
                         elizaLogger.log(
                             `Already processed tweet ID: ${tweet.id}`
                         );
+                        continue;
+                    }
+
+                    if (tweet.username === this.twitterUsername) {
+                        elizaLogger.log(`Skipping own tweet: ${tweet.id}`);
                         continue;
                     }
 
@@ -699,17 +704,37 @@ export class TwitterPostClient {
                         modelClass: ModelClass.SMALL,
                     });
 
-                    if (!actionResponse) {
+                    if (
+                        !actionResponse ||
+                        Object.keys(actionResponse).length === 0
+                    ) {
                         elizaLogger.log(
                             `No valid actions generated for tweet ${tweet.id}`
                         );
+                        await this.createSkippedTweetMemory(tweet, roomId);
+                        continue;
+                    }
+
+                    if (
+                        (actionResponse.reply &&
+                            !tweet.text.includes(`@${this.twitterUsername}`) &&
+                            !this.isHighlyRelevant(tweet)) ||
+                        (actionResponse.quote &&
+                            !this.isHighlyRelevant(tweet)) ||
+                        (actionResponse.retweet &&
+                            !this.isHighlyRelevant(tweet))
+                    ) {
+                        elizaLogger.log(
+                            `Tweet ${tweet.id} didn't pass additional relevance checks`
+                        );
+                        await this.createSkippedTweetMemory(tweet, roomId);
                         continue;
                     }
 
                     const executedActions: string[] = [];
 
                     // Execute actions
-                    if (actionResponse.like) {
+                    if (actionResponse.like && this.canPerformAction("like")) {
                         try {
                             if (this.isDryRun) {
                                 elizaLogger.info(
@@ -723,6 +748,7 @@ export class TwitterPostClient {
                                 executedActions.push("like");
                                 elizaLogger.log(`Liked tweet ${tweet.id}`);
                                 this.numLikes++;
+                                await this.updateActionCounter("like");
                             }
                         } catch (error) {
                             elizaLogger.error(
@@ -732,7 +758,10 @@ export class TwitterPostClient {
                         }
                     }
 
-                    if (actionResponse.retweet) {
+                    if (
+                        actionResponse.retweet &&
+                        this.canPerformAction("retweet")
+                    ) {
                         try {
                             if (this.isDryRun) {
                                 elizaLogger.info(
@@ -746,6 +775,7 @@ export class TwitterPostClient {
                                 executedActions.push("retweet");
                                 elizaLogger.log(`Retweeted tweet ${tweet.id}`);
                                 this.numRetweets++;
+                                await this.updateActionCounter("retweet");
                             }
                         } catch (error) {
                             elizaLogger.error(
@@ -1087,6 +1117,7 @@ export class TwitterPostClient {
                     `Context:\n${enrichedState}\n\nGenerated Reply:\n${replyText}`
                 );
                 this.numReplies++;
+                await this.updateActionCounter("reply");
             } else {
                 elizaLogger.error("Tweet reply creation failed");
             }
@@ -1095,9 +1126,147 @@ export class TwitterPostClient {
         }
     }
 
-    async stop() {
-        // Stop action processing
-        elizaLogger.log("Action processing stopped");
-        this.stopProcessingActions = true;
+    // Helper method to check if a tweet is highly relevant
+    private isHighlyRelevant(tweet: Tweet): boolean {
+        // Get keywords and topics from the agent's character profile
+        const relevantTopics = this.runtime.character.topics || [];
+        const keywords = this.runtime.character.twitterQuery.split(" ") || [];
+
+        // Convert tweet text to lowercase for case-insensitive matching
+        const tweetText = tweet.text.toLowerCase();
+
+        // Check for direct mentions
+        if (tweetText.includes(`@${this.twitterUsername.toLowerCase()}`)) {
+            return true;
+        }
+
+        // Check for highly relevant topics
+        const topicMatches = relevantTopics.filter((topic) =>
+            tweetText.includes(topic.toLowerCase())
+        ).length;
+
+        // Check for keyword matches
+        const keywordMatches = keywords.filter((keyword) =>
+            tweetText.includes(keyword.toLowerCase())
+        ).length;
+
+        // Consider tweet highly relevant if it matches multiple topics/keywords
+        return topicMatches >= 2 || keywordMatches >= 3;
+    }
+
+    // Helper method to create memory for skipped tweets
+    private async createSkippedTweetMemory(tweet: Tweet, roomId: UUID) {
+        await this.runtime.ensureRoomExists(roomId);
+        await this.runtime.ensureUserExists(
+            stringToUuid(tweet.userId),
+            tweet.username,
+            tweet.name,
+            "twitter"
+        );
+        await this.runtime.ensureParticipantInRoom(
+            this.runtime.agentId,
+            roomId
+        );
+
+        await this.runtime.messageManager.createMemory({
+            id: stringToUuid(tweet.id + "-" + this.runtime.agentId),
+            userId: stringToUuid(tweet.userId),
+            content: {
+                text: tweet.text,
+                url: tweet.permanentUrl,
+                source: "twitter",
+                action: "skipped",
+            },
+            agentId: this.runtime.agentId,
+            roomId,
+            embedding: getEmbeddingZeroVector(),
+            createdAt: tweet.timestamp * 1000,
+        });
+    }
+
+    // Helper method to create memory for processed tweets
+    private async createProcessedTweetMemory(
+        tweet: Tweet,
+        roomId: UUID,
+        executedActions: string[]
+    ) {
+        await this.runtime.ensureRoomExists(roomId);
+        await this.runtime.ensureUserExists(
+            stringToUuid(tweet.userId),
+            tweet.username,
+            tweet.name,
+            "twitter"
+        );
+        await this.runtime.ensureParticipantInRoom(
+            this.runtime.agentId,
+            roomId
+        );
+
+        await this.runtime.messageManager.createMemory({
+            id: stringToUuid(tweet.id + "-" + this.runtime.agentId),
+            userId: stringToUuid(tweet.userId),
+            content: {
+                text: tweet.text,
+                url: tweet.permanentUrl,
+                source: "twitter",
+                action: executedActions.join(","),
+            },
+            agentId: this.runtime.agentId,
+            roomId,
+            embedding: getEmbeddingZeroVector(),
+            createdAt: tweet.timestamp * 1000,
+        });
+    }
+
+    private actionCounts: {
+        [key: string]: { count: number; lastReset: number };
+    } = {
+        like: { count: 0, lastReset: Date.now() },
+        retweet: { count: 0, lastReset: Date.now() },
+        reply: { count: 0, lastReset: Date.now() },
+        quote: { count: 0, lastReset: Date.now() },
+    };
+
+    private readonly ACTION_LIMITS = {
+        like: { max: 50, windowHours: 24 },
+        retweet: { max: 25, windowHours: 24 },
+        reply: { max: 30, windowHours: 24 },
+        quote: { max: 25, windowHours: 24 },
+    };
+
+    private canPerformAction(actionType: string): boolean {
+        const now = Date.now();
+        const actionState = this.actionCounts[actionType];
+        const limit =
+            this.ACTION_LIMITS[actionType as keyof typeof this.ACTION_LIMITS];
+
+        if (!actionState || !limit) {
+            return false;
+        }
+
+        // Reset counter if window has passed
+        const windowMs = limit.windowHours * 60 * 60 * 1000;
+        if (now - actionState.lastReset >= windowMs) {
+            actionState.count = 0;
+            actionState.lastReset = now;
+        }
+
+        return actionState.count < limit.max;
+    }
+
+    private async updateActionCounter(actionType: string): Promise<void> {
+        const actionState = this.actionCounts[actionType];
+        if (actionState) {
+            actionState.count++;
+
+            // Store the updated count in cache for persistence
+            await this.runtime.cacheManager.set(
+                `twitter/${this.twitterUsername}/action_counts/${actionType}`,
+                {
+                    count: actionState.count,
+                    lastReset: actionState.lastReset,
+                }
+            );
+        }
     }
 }
