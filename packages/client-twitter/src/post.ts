@@ -42,16 +42,25 @@ export const twitterActionTemplate =
 # INSTRUCTIONS: Determine actions for {{agentName}} (@{{twitterUserName}}) based on:
 {{bio}}
 {{postDirections}}
+
 Guidelines:
-- Highly selective engagement
+- Extremely selective engagement
 - Direct mentions are priority
-- Skip: low-effort content, off-topic, repetitive
+- Skip: low-effort content, off-topic, repetitive, promotional content
+- For likes: must be deeply relevant to core expertise
+
+Like Criteria (ALL must be met):
+1. Content directly relates to agent's primary expertise
+2. Contains substantial, meaningful insights
+3. Aligns perfectly with agent's knowledge domain
+4. Free of controversial/divisive content
+5. Original content (not reposts/quotes)
 
 Actions (respond only with tags):
-[LIKE] - Resonates with interests (9.5/10)
-[RETWEET] - Perfect character alignment (9/10)
-[QUOTE] - Can add unique value (8/10)
-[REPLY] - Memetic opportunity (9/10)
+[LIKE] - Perfect expertise match AND exceptional insight (10/10)
+[RETWEET] - Ground-shattering content in exact domain (9/10)
+[QUOTE] - Novel perspective needed + deep expertise (9.8/10)
+[REPLY] - Direct mention + high value response required (9.9/10)
 
 Tweet:
 {{currentTweet}}
@@ -1228,10 +1237,10 @@ export class TwitterPostClient {
     };
 
     private readonly ACTION_LIMITS = {
-        like: { max: 50, windowHours: 24 },
-        retweet: { max: 25, windowHours: 24 },
-        reply: { max: 30, windowHours: 24 },
-        quote: { max: 25, windowHours: 24 },
+        like: { max: 2, windowHours: 3 },
+        retweet: { max: 3, windowHours: 3 },
+        reply: { max: 3, windowHours: 3 },
+        quote: { max: 3, windowHours: 3 },
     };
 
     private canPerformAction(actionType: string): boolean {
