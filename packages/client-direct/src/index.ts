@@ -652,7 +652,6 @@ export class DirectClient {
                 let runtime: AgentRuntime = await this.startAgent({
                     ...defaultCharacter,
                     name: ideaName,
-                    agentName: `${ideaName} Agent`,
                     twitterQuery: dynamicCharacter
                         ? dynamicCharacter.twitterQuery.join(" ")
                         : "",
