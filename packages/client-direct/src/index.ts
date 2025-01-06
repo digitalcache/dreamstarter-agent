@@ -723,6 +723,8 @@ export class DirectClient {
                     }
                 } catch (error) {
                     console.log(error);
+                    await TwitterClientInterface.stop(runtime);
+                    this.unregisterAgent(this.agents.get(agentId));
                     res.status(403).json({
                         success: false,
                         message:

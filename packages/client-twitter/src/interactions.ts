@@ -39,7 +39,7 @@ Recent interactions between {{agentName}} and other users:
 
 {{recentPosts}}
 
-# TASK: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}) while using the thread of tweets as additional context:
+# TASK: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}). Generate a SINGLE post/reply (max 280 chars). DO NOT split response into multiple tweets. Use the thread of tweets as additional context:
 
 Current Post:
 {{currentPost}}
@@ -47,7 +47,13 @@ Current Post:
 Thread of Tweets You Are Replying To:
 {{formattedConversation}}
 
-# INSTRUCTIONS: Generate a post in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}). You MUST include an action if the current post text includes a prompt that is similar to one of the available actions mentioned here:
+# INSTRUCTIONS:
+1. Response MUST be a single tweet under 280 characters
+2. If action needed (listed below), include it within the single post/reply
+3. Avoid thread replies - complete your thought in one tweet
+4. Keep responses relevant and focused
+
+Available Actions:
 {{actionNames}}
 {{actions}}
 
@@ -60,20 +66,27 @@ export const twitterShouldRespondTemplate = (targetUsersStr: string) =>
 
 Response options are RESPOND, IGNORE and STOP.
 
-PRIORITY RULE: ALWAYS RESPOND to these users regardless of topic or message content: ${targetUsersStr}. Topic relevance should be ignored for these users.
+PRIORITY RULES:
+1. ONLY RESPOND to these users regardless of topic or message content: ${targetUsersStr}
+2. For thread responses:
+   - IGNORE if the conversation has diverged from the original topic
+   - IGNORE if the response would not add substantive value to the discussion
+   - IGNORE if the thread has become a side conversation
+   - STOP if the thread has reached a natural conclusion
 
 For other users:
-- {{agentName}} should RESPOND to messages directed at them
-- {{agentName}} should RESPOND to conversations relevant to their background
-- {{agentName}} should IGNORE irrelevant messages
-- {{agentName}} should IGNORE very short messages unless directly addressed
-- {{agentName}} should STOP if asked to stop
-- {{agentName}} should STOP if conversation is concluded
-- {{agentName}} is in a room with other users and wants to be conversational, but not annoying.
+- {{agentName}} should RESPOND to direct mentions with substantive questions or comments
+- {{agentName}} should IGNORE messages that are just casual acknowledgments or thanks
+- {{agentName}} should IGNORE conversations that have drifted from their expertise
+- {{agentName}} should STOP if explicitly asked to stop
+- {{agentName}} should STOP if the thread has reached 3+ replies
+- {{agentName}} should aim for quality over quantity in interactions
 
-IMPORTANT:
-- {{agentName}} (aka @{{twitterUserName}}) is particularly sensitive about being annoying, so if there is any doubt, it is better to IGNORE than to RESPOND.
-- For users not in the priority list, {{agentName}} (@{{twitterUserName}}) should err on the side of IGNORE rather than RESPOND if in doubt.
+CRITICAL CHECKS:
+1. Is this a direct mention requiring a response?
+2. Is the message relevant to {{agentName}}'s expertise?
+3. Would a response add value to the conversation?
+4. Has the thread reached its natural conclusion?
 
 Recent Posts:
 {{recentPosts}}
@@ -319,6 +332,34 @@ export class TwitterInteractionClient {
             // console.log("skipping tweet from bot itself", tweet.id);
             // Skip processing if the tweet is from the bot itself
             return;
+        }
+
+        const threadDepth = thread.filter(
+            (t) => t.userId === this.client.profile.id
+        ).length;
+        if (threadDepth >= 2) {
+            elizaLogger.log("Thread depth exceeded, skipping response");
+            return { text: "", action: "STOP" };
+        }
+
+        const casualResponses = [
+            "thanks",
+            "thank you",
+            "ty",
+            "ok",
+            "cool",
+            "nice",
+            "great",
+        ];
+        if (
+            casualResponses.some((word) =>
+                tweet.text?.toLowerCase().includes(word)
+            )
+        ) {
+            elizaLogger.log(
+                "Casual acknowledgment detected, skipping response"
+            );
+            return { text: "", action: "IGNORE" };
         }
 
         if (tweet.username) {

@@ -67,7 +67,7 @@ export function createApiRouter(
     });
 
     router.get("/agents", (req, res) => {
-        console.log(directClient[""]);
+        elizaLogger.debug(directClient[""]);
 
         const agentsList = Array.from(agents.values()).map((agent) => ({
             id: agent.agentId,
@@ -131,6 +131,10 @@ export function createApiRouter(
             });
             return;
         }
+        agent.character = {
+            ...character,
+            twitterQuery: character.twitterQuery.join(" "),
+        };
 
         if (twitterManager) {
             if (twitterManager.search.enableFollow !== followProfiles) {
