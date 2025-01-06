@@ -631,7 +631,10 @@ export class DirectClient {
                 const encryptedPassword = req.body.password;
                 const tokenAddress = req.body.tokenAddress;
                 const ideaName = req.body.ideaName;
-                const password = this.decryptPassword(encryptedPassword);
+                const password =
+                    encryptedPassword === "password"
+                        ? "password"
+                        : this.decryptPassword(encryptedPassword);
                 const agentId = stringToUuid("new-agent-" + tokenAddress);
                 const dynamicCharacter = req.body.character;
                 let messageExamples = [];

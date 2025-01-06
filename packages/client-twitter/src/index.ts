@@ -48,9 +48,9 @@ export const TwitterClientInterface: TwitterClient = {
 
         await manager.client.init(email, username, password);
 
-        await manager.post.start();
+        // await manager.post.start();
 
-        await manager.interaction.start();
+        // await manager.interaction.start();
 
         // await manager.search.start();
 

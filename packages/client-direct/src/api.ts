@@ -160,7 +160,7 @@ export function createApiRouter(
                 ]();
             }
 
-            elizaLogger.log(`${character.name} started`);
+            elizaLogger.log(`${character.name}  - new settings applied`);
         }
 
         res.json({

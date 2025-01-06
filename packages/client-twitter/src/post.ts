@@ -127,7 +127,7 @@ export class TwitterPostClient {
         this.twitterUsername = this.runtime.getSetting("TWITTER_USERNAME");
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
         this.tweetGenerationTimeoutId = null;
-        this.enableScheduledPosts = true;
+        this.enableScheduledPosts = false;
 
         // Log configuration on initialization
         elizaLogger.log("Twitter Client Configuration:");
@@ -167,7 +167,6 @@ export class TwitterPostClient {
         // if (!this.client.profile) {
         //     await this.client.init();
         // }
-
         const generateNewTweetLoop = async () => {
             if (!this.enableScheduledPosts) {
                 return;
