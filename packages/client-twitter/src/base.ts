@@ -788,18 +788,27 @@ export class ClientBase extends EventEmitter {
         try {
             const profile = await this.requestQueue.add(async () => {
                 const profile = await this.twitterClient.getProfile(username);
-                // console.log({ profile });
+                console.log(
+                    "bio is",
+                    profile.biography
+                        ? profile.biography
+                        : typeof this.runtime.character.bio === "string"
+                          ? (this.runtime.character.bio as string)
+                          : this.runtime.character.bio.length > 0
+                            ? this.runtime.character.bio[0]
+                            : ""
+                );
                 return {
                     id: profile.userId,
                     username,
                     screenName: profile.name || this.runtime.character.name,
-                    bio:
-                        profile.biography ||
-                        typeof this.runtime.character.bio === "string"
-                            ? (this.runtime.character.bio as string)
-                            : this.runtime.character.bio.length > 0
-                              ? this.runtime.character.bio[0]
-                              : "",
+                    bio: profile.biography
+                        ? profile.biography
+                        : typeof this.runtime.character.bio === "string"
+                          ? (this.runtime.character.bio as string)
+                          : this.runtime.character.bio.length > 0
+                            ? this.runtime.character.bio[0]
+                            : "",
                     nicknames:
                         this.runtime.character.twitterProfile?.nicknames || [],
                 } satisfies TwitterProfile;
