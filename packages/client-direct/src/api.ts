@@ -151,6 +151,11 @@ export function createApiRouter(
                 await twitterManager.post[
                     processionActions ? "startProcessingActions" : "stop"
                 ]();
+                if (processionActions) {
+                    await twitterManager.interaction.start();
+                } else {
+                    await twitterManager.interaction.stop();
+                }
             }
 
             if (twitterManager.post.enableScheduledPosts !== schedulingPosts) {

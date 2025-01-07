@@ -34,8 +34,9 @@ const twitterPostTemplate = `
 
 # Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
 Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
-Your response should be 1, 2, or 3 sentences (choose the length at random).
-Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than {{maxTweetLength}}. No emojis. Use \\n\\n (double spaces) between statements if there are multiple statements in your response.`;
+Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than 275 characters (to ensure it fits within Twitter's limits). Use \\n\\n (double spaces) between statements if there are multiple statements in your response. If there is a URL in the response, prioritize that and reframe sentence.
+Your response should be 1, 2, or 3 sentences, but definitely include the URL if provided.
+`;
 
 export const twitterActionTemplate =
     `
@@ -58,9 +59,9 @@ Like Criteria (ALL must be met):
 
 Actions (respond only with tags):
 [LIKE] - Perfect expertise match AND exceptional insight (10/10)
-[RETWEET] - Ground-shattering content in exact domain (9/10)
+[RETWEET] - Must exemplify character values AND add value to followers (9/10)
 [QUOTE] - Novel perspective needed + deep expertise (9.8/10)
-[REPLY] - Direct mention + high value response required (9.9/10)
+[REPLY] - Must create meaningful dialogue opportunity (9.9/10)
 
 Tweet:
 {{currentTweet}}
@@ -72,33 +73,79 @@ Tweet:
  */
 function truncateToCompleteSentence(
     text: string,
-    maxTweetLength: number
+    maxTweetLength: number = 280
 ): string {
     if (text.length <= maxTweetLength) {
         return text;
     }
 
-    // Attempt to truncate at the last period within the limit
-    const lastPeriodIndex = text.lastIndexOf(".", maxTweetLength - 1);
-    if (lastPeriodIndex !== -1) {
-        const truncatedAtPeriod = text.slice(0, lastPeriodIndex + 1).trim();
-        if (truncatedAtPeriod.length > 0) {
-            return truncatedAtPeriod;
+    // Regular expression to match URLs
+    // Matches common URL patterns including various TLDs
+    const urlRegex =
+        /https?:\/\/[^\s]+?\.(?:com|org|net|edu|gov|xyz|io|ai|dev|co|me|info|blog|app|cloud|tech)[^\s]*/gi;
+
+    // Find all URLs in the text
+    const urls = text.match(urlRegex) || [];
+
+    // Replace URLs with placeholders to protect them during truncation
+    let processedText = text;
+    const urlMap = new Map<string, string>();
+
+    urls.forEach((url, index) => {
+        const placeholder = `__URL_${index}__`;
+        urlMap.set(placeholder, url);
+        processedText = processedText.replace(url, placeholder);
+    });
+
+    // Find the last sentence break before maxTweetLength
+    let truncatedText = processedText;
+    const sentenceBreaks = [...processedText.matchAll(/[.!?]+(?=\s|$)/g)];
+    const lastValidBreak = sentenceBreaks
+        .reverse()
+        .find(
+            (match) => match.index !== undefined && match.index < maxTweetLength
+        );
+
+    if (lastValidBreak?.index !== undefined) {
+        // Truncate at the last valid sentence break
+        truncatedText = processedText.slice(0, lastValidBreak.index + 1).trim();
+    } else {
+        // If no sentence break found, try to break at last space
+        const lastSpace = processedText.lastIndexOf(" ", maxTweetLength - 3);
+        if (lastSpace !== -1) {
+            truncatedText = processedText.slice(0, lastSpace).trim() + "...";
+        } else {
+            // Hard truncate as last resort
+            truncatedText =
+                processedText.slice(0, maxTweetLength - 3).trim() + "...";
         }
     }
 
-    // If no period, truncate to the nearest whitespace within the limit
-    const lastSpaceIndex = text.lastIndexOf(" ", maxTweetLength - 1);
-    if (lastSpaceIndex !== -1) {
-        const truncatedAtSpace = text.slice(0, lastSpaceIndex).trim();
-        if (truncatedAtSpace.length > 0) {
-            return truncatedAtSpace + "...";
+    // Restore URLs in the truncated text
+    urlMap.forEach((url, placeholder) => {
+        truncatedText = truncatedText.replace(placeholder, url);
+    });
+
+    // Final length check after URL restoration
+    if (truncatedText.length > maxTweetLength) {
+        // If still too long, do a hard truncate preserving as much as possible
+        const lastUrl = urls.find((url) => truncatedText.includes(url));
+
+        if (
+            lastUrl &&
+            truncatedText.indexOf(lastUrl) + lastUrl.length > maxTweetLength - 3
+        ) {
+            // If a URL is causing the overflow, truncate before the URL
+            truncatedText =
+                truncatedText.slice(0, truncatedText.indexOf(lastUrl)).trim() +
+                "...";
+        } else {
+            // Otherwise, do a hard truncate
+            truncatedText = truncatedText.slice(0, maxTweetLength - 3) + "...";
         }
     }
 
-    // Fallback: Hard truncate and add ellipsis
-    const hardTruncated = text.slice(0, maxTweetLength - 3).trim();
-    return hardTruncated + "...";
+    return truncatedText;
 }
 
 export class TwitterPostClient {
@@ -478,7 +525,7 @@ export class TwitterPostClient {
             const newTweetContent = await generateText({
                 runtime: this.runtime,
                 context,
-                modelClass: ModelClass.SMALL,
+                modelClass: ModelClass.MEDIUM,
             });
 
             // First attempt to clean content
@@ -515,13 +562,13 @@ export class TwitterPostClient {
             }
 
             // Truncate the content to the maximum tweet length specified in the environment settings, ensuring the truncation respects sentence boundaries.
-            const maxTweetLength = this.client.twitterConfig.MAX_TWEET_LENGTH;
-            if (maxTweetLength) {
-                cleanedContent = truncateToCompleteSentence(
-                    cleanedContent,
-                    maxTweetLength
-                );
-            }
+            // const maxTweetLength = this.client.twitterConfig.MAX_TWEET_LENGTH;
+            // if (maxTweetLength) {
+            //     cleanedContent = truncateToCompleteSentence(
+            //         cleanedContent,
+            //         maxTweetLength
+            //     );
+            // }
 
             const removeQuotes = (str: string) =>
                 str.replace(/^['"](.*)['"]$/, "$1");
@@ -655,7 +702,7 @@ export class TwitterPostClient {
                 "twitter"
             );
 
-            const homeTimeline = await this.client.fetchTimelineForActions(15);
+            const homeTimeline = await this.client.fetchTimelineForActions(10);
             const results = [];
 
             for (const tweet of homeTimeline) {

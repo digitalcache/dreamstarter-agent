@@ -39,7 +39,7 @@ Recent interactions between {{agentName}} and other users:
 
 {{recentPosts}}
 
-# TASK: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}). Generate a SINGLE post/reply (max 280 chars). DO NOT split response into multiple tweets. Use the thread of tweets as additional context:
+# TASK: Generate a single post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}) with total characters exceeding 275 characters while using the thread of tweets as additional context:
 
 Current Post:
 {{currentPost}}
@@ -47,13 +47,8 @@ Current Post:
 Thread of Tweets You Are Replying To:
 {{formattedConversation}}
 
-# INSTRUCTIONS:
-1. Response MUST be a single tweet under 280 characters
-2. If action needed (listed below), include it within the single post/reply
-3. Avoid thread replies - complete your thought in one tweet
-4. Keep responses relevant and focused
+# INSTRUCTIONS: Generate a post in the style and perspective of {{agentName}} (@{{twitterUserName}}). Avoid thread replies - complete your thought in one tweet. You MUST include an action if the current post text includes a prompt that is similar to one of the available actions mentioned here:
 
-Available Actions:
 {{actionNames}}
 {{actions}}
 
@@ -340,26 +335,6 @@ export class TwitterInteractionClient {
         if (threadDepth >= 2) {
             elizaLogger.log("Thread depth exceeded, skipping response");
             return { text: "", action: "STOP" };
-        }
-
-        const casualResponses = [
-            "thanks",
-            "thank you",
-            "ty",
-            "ok",
-            "cool",
-            "nice",
-            "great",
-        ];
-        if (
-            casualResponses.some((word) =>
-                tweet.text?.toLowerCase().includes(word)
-            )
-        ) {
-            elizaLogger.log(
-                "Casual acknowledgment detected, skipping response"
-            );
-            return { text: "", action: "IGNORE" };
         }
 
         if (tweet.username) {

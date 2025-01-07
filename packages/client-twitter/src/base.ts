@@ -320,7 +320,7 @@ export class ClientBase extends EventEmitter {
         elizaLogger.debug("fetching timeline for actions");
 
         const agentUsername = this.runtime.getSetting("TWITTER_USERNAME");
-        const homeTimeline = await this.twitterClient.fetchHomeTimeline(
+        const homeTimeline = await this.twitterClient.fetchFollowingTimeline(
             count,
             []
         );
@@ -788,16 +788,6 @@ export class ClientBase extends EventEmitter {
         try {
             const profile = await this.requestQueue.add(async () => {
                 const profile = await this.twitterClient.getProfile(username);
-                console.log(
-                    "bio is",
-                    profile.biography
-                        ? profile.biography
-                        : typeof this.runtime.character.bio === "string"
-                          ? (this.runtime.character.bio as string)
-                          : this.runtime.character.bio.length > 0
-                            ? this.runtime.character.bio[0]
-                            : ""
-                );
                 return {
                     id: profile.userId,
                     username,
