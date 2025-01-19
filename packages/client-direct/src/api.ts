@@ -59,6 +59,10 @@ export function createApiRouter(
     );
 
     router.use(checkOrigin);
+    router.use((req, res, next) => {
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+        next();
+    });
 
     router.get("/", (req, res) => {
         res.setHeader("X-Content-Type-Options", "nosniff");
