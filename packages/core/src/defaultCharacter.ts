@@ -4,7 +4,7 @@ export const defaultCharacter: Character = {
     name: "DreamStarterGuide",
     plugins: [],
     clients: [Clients.TWITTER],
-    modelProvider: ModelProviderName.OPENROUTER,
+    modelProvider: ModelProviderName.ANTHROPIC,
     settings: {
         modelConfig: {
             // maxInputTokens: 10000,
