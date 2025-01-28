@@ -84,6 +84,7 @@ const logFetch = async (url: string, options: any) => {
     return fetch(url, options);
 };
 
+
 export function parseArguments(): {
     character?: string;
     characters?: string;
