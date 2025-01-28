@@ -7,7 +7,7 @@ import {
     getEnvVariable,
     validateCharacterConfig,
 } from "@elizaos/core";
-
+import {generateImage} from "@elizaos/plugin-image-generation"
 import { REST, Routes } from "discord.js";
 import { DirectClient } from ".";
 
@@ -107,6 +107,24 @@ export function createApiRouter(
                     (twitterClient?.interaction?.numReplies || 0),
             },
         });
+    });
+
+    router.post("/generate-image", async (req, res) => {
+        const {description} = req.body;
+
+        if (!description) {
+            res.status(400).json({
+                successs: false,
+                message :  " Description is required",
+            })
+            try {
+                const image = await generateImage(description);
+                res.json({success: true, image});
+            } catch (error) {
+              console.error("Error genetrating image ", error)
+              res.status(500).json({error : "generating image failed"})
+            }
+        }
     });
 
     router.post("/agents/:agentId/set", async (req, res) => {
