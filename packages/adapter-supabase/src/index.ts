@@ -9,6 +9,7 @@ import {
     type UUID,
     Participant,
     Room,
+    RoomWithStatus,
 } from "@elizaos/core";
 import { DatabaseAdapter } from "@elizaos/core";
 import { v4 as uuid } from "uuid";
@@ -25,6 +26,18 @@ export class SupabaseDatabaseAdapter extends DatabaseAdapter {
         }
 
         return data ? (data.id as UUID) : null;
+    }
+
+    async getRooms(): Promise<RoomWithStatus[] | []> {
+        const { data, error } = await this.supabase
+            .from("rooms")
+            .select("id, status, character");
+
+        if (error) {
+            throw new Error(`Error getting rooms: ${error.message}`);
+        }
+
+        return data as any;
     }
 
     async getParticipantsForAccount(userId: UUID): Promise<Participant[]> {
@@ -538,7 +551,8 @@ export class SupabaseDatabaseAdapter extends DatabaseAdapter {
     async createRoom(roomId?: UUID): Promise<UUID> {
         roomId = roomId ?? (uuid() as UUID);
         const { data, error } = await this.supabase.rpc("create_room", {
-            roomId,
+            room_id: roomId,
+            initial_status: "stopped",
         });
 
         if (error) {
@@ -550,6 +564,22 @@ export class SupabaseDatabaseAdapter extends DatabaseAdapter {
         }
 
         return data[0].id as UUID;
+    }
+
+    async updateRoomStatus(
+        roomId: UUID,
+        status: "running" | "active",
+        character?: string
+    ): Promise<void> {
+        const { error } = await this.supabase.rpc("update_room_status", {
+            room_id: roomId,
+            new_status: status,
+            character_name: character,
+        });
+
+        if (error) {
+            throw new Error(`Error updating room status: ${error.message}`);
+        }
     }
 
     async removeRoom(roomId: UUID): Promise<void> {

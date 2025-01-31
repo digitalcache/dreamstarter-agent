@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS "relationships" (
 -- Table: rooms
 CREATE TABLE IF NOT EXISTS "rooms" (
     "id" TEXT PRIMARY KEY,
+    "status" TEXT NOT NULL DEFAULT 'stopped',
+    "character" TEXT,
+    "settings" TEXT,
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

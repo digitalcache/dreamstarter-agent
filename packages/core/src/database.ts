@@ -8,6 +8,7 @@ import {
     type UUID,
     Participant,
     IDatabaseAdapter,
+    RoomWithStatus,
 } from "./types.ts";
 import { CircuitBreaker } from "./database/CircuitBreaker";
 import { elizaLogger } from "./logger";
@@ -275,6 +276,7 @@ export abstract class DatabaseAdapter<DB = any> implements IDatabaseAdapter {
      * @returns A Promise that resolves to the room ID or null if not found.
      */
     abstract getRoom(roomId: UUID): Promise<UUID | null>;
+    abstract getRooms(): Promise<RoomWithStatus[] | []>;
 
     /**
      * Creates a new room with an optional specified ID.
@@ -282,6 +284,13 @@ export abstract class DatabaseAdapter<DB = any> implements IDatabaseAdapter {
      * @returns A Promise that resolves to the UUID of the created room.
      */
     abstract createRoom(roomId?: UUID): Promise<UUID>;
+
+    abstract updateRoomStatus(
+        roomId: UUID,
+        status: string,
+        character?: string,
+        settings?: string
+    ): Promise<void>;
 
     /**
      * Removes a specific room from the database.

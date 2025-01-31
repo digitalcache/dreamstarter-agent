@@ -5,6 +5,13 @@ import { Readable } from "stream";
  */
 export type UUID = `${string}-${string}-${string}-${string}-${string}`;
 
+export interface RoomWithStatus {
+    id: UUID;
+    status: "active" | "stopped";
+    character: string;
+    settings?: string;
+}
+
 /**
  * Represents the content of a message or communication
  */
@@ -933,7 +940,16 @@ export interface IDatabaseAdapter {
 
     getRoom(roomId: UUID): Promise<UUID | null>;
 
+    getRooms(): Promise<RoomWithStatus[]>;
+
     createRoom(roomId?: UUID): Promise<UUID>;
+
+    updateRoomStatus(
+        roomId: UUID,
+        status: "active" | "stopped",
+        character?: string,
+        settings?: string
+    ): Promise<void>;
 
     removeRoom(roomId: UUID): Promise<void>;
 

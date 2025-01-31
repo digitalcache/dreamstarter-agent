@@ -24,6 +24,7 @@ import {
     getEmbeddingConfig,
     DatabaseAdapter,
     EmbeddingProvider,
+    RoomWithStatus,
 } from "@elizaos/core";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -269,6 +270,34 @@ export class PostgresDatabaseAdapter
             );
             return rows.length > 0 ? (rows[0].id as UUID) : null;
         }, "getRoom");
+    }
+
+    async getRooms(): Promise<RoomWithStatus[]> {
+        return this.withDatabase(async () => {
+            await this.pool.query(`
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_name='rooms' AND column_name='status'
+                    ) THEN
+                        ALTER TABLE rooms ADD COLUMN status TEXT NOT NULL DEFAULT 'stopped';
+                    END IF;
+                END $$;
+            `);
+
+            // Then query with status
+            const { rows } = await this.pool.query(
+                "SELECT id, COALESCE(status, 'stopped') as status, character, settings FROM rooms"
+            );
+            return rows.map((row) => ({
+                id: row.id as UUID,
+                character: row.character as string,
+                status: row.status as "active" | "stopped",
+                settings: row.settings as string,
+            }));
+        }, "getRooms");
     }
 
     async getParticipantsForAccount(userId: UUID): Promise<Participant[]> {
@@ -722,11 +751,32 @@ export class PostgresDatabaseAdapter
     async createRoom(roomId?: UUID): Promise<UUID> {
         return this.withDatabase(async () => {
             const newRoomId = roomId || v4();
-            await this.pool.query("INSERT INTO rooms (id) VALUES ($1)", [
-                newRoomId,
-            ]);
+            await this.pool.query(
+                "INSERT INTO rooms (id, status) VALUES ($1, $2)",
+                [newRoomId, "stopped"]
+            );
             return newRoomId as UUID;
         }, "createRoom");
+    }
+
+    async updateRoomStatus(
+        roomId: UUID,
+        status: "running" | "stopped",
+        character?: string
+    ): Promise<void> {
+        return this.withDatabase(async () => {
+            if (character) {
+                await this.pool.query(
+                    "UPDATE rooms SET status = $1, character = $2 WHERE id = $3",
+                    [status, character, roomId]
+                );
+            } else {
+                await this.pool.query(
+                    "UPDATE rooms SET status = $1 WHERE id = $2",
+                    [status, roomId]
+                );
+            }
+        }, "updateRoomStatus");
     }
 
     async removeRoom(roomId: UUID): Promise<void> {

@@ -8,6 +8,7 @@ import {
     GoalStatus,
     IDatabaseCacheAdapter,
     Participant,
+    RoomWithStatus,
     type Goal,
     type Memory,
     type Relationship,
@@ -41,6 +42,45 @@ export class SqlJsDatabaseAdapter
         const room = stmt.getAsObject() as { id: string } | undefined;
         stmt.free();
         return room ? (room.id as UUID) : null;
+    }
+    async getRooms(): Promise<RoomWithStatus[] | []> {
+        // First ensure status column exists if it doesn't
+        const alterStmt = this.db.prepare(
+            "SELECT name FROM pragma_table_info('rooms') WHERE name='status'"
+        );
+        let hasStatus = false;
+        while (alterStmt.step()) {
+            hasStatus = true;
+        }
+        alterStmt.free();
+
+        if (!hasStatus) {
+            const addColumnStmt = this.db.prepare(
+                "ALTER TABLE rooms ADD COLUMN status TEXT NOT NULL DEFAULT 'stopped'"
+            );
+            addColumnStmt.run();
+            addColumnStmt.free();
+        }
+
+        const sql =
+            "SELECT id, COALESCE(status, 'stopped') as status FROM rooms";
+        const stmt = this.db.prepare(sql);
+        const results: RoomWithStatus[] = [];
+
+        while (stmt.step()) {
+            const row = stmt.getAsObject() as {
+                id: string;
+                status: string;
+                character: string;
+            };
+            results.push({
+                id: row.id as UUID,
+                character: row.character as string,
+                status: row.status as "active" | "stopped",
+            });
+        }
+        stmt.free();
+        return results;
     }
 
     async getParticipantsForAccount(userId: UUID): Promise<Participant[]> {
@@ -628,14 +668,36 @@ export class SqlJsDatabaseAdapter
     async createRoom(roomId?: UUID): Promise<UUID> {
         roomId = roomId || (v4() as UUID);
         try {
-            const sql = "INSERT INTO rooms (id) VALUES (?)";
+            const sql = "INSERT INTO rooms (id, status) VALUES (?, ?)";
             const stmt = this.db.prepare(sql);
-            stmt.run([roomId ?? (v4() as UUID)]);
+            stmt.run([roomId ?? (v4() as UUID), "stopped"]);
             stmt.free();
         } catch (error) {
             console.log("Error creating room", error);
         }
         return roomId as UUID;
+    }
+    async updateRoomStatus(
+        roomId: UUID,
+        status: "running" | "stopped",
+        character?: string
+    ): Promise<void> {
+        try {
+            if (character) {
+                const sql =
+                    "UPDATE rooms SET status = ?, character = ? WHERE id = ?";
+                const stmt = this.db.prepare(sql);
+                stmt.run([status, character, roomId]);
+                stmt.free();
+            } else {
+                const sql = "UPDATE rooms SET status = ? WHERE id = ?";
+                const stmt = this.db.prepare(sql);
+                stmt.run([status, roomId]);
+                stmt.free();
+            }
+        } catch (error) {
+            console.log("Error updating room status", error);
+        }
     }
 
     async removeRoom(roomId: UUID): Promise<void> {

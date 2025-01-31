@@ -118,13 +118,27 @@ export function createApiRouter(
         const schedulingPosts = req.body.schedulingPosts;
         const followProfiles = req.body.followProfiles;
         const processionActions = req.body.processionActions;
-
+        const character = req.body.character;
+        const settings = {
+            schedulingPosts,
+            followProfiles,
+            processionActions,
+        };
         const agent: AgentRuntime = agents.get(agentId);
+        await directClient.db.updateRoomStatus(
+            agent.agentId,
+            "active",
+            JSON.stringify({
+                ...character,
+                twitterQuery: character.twitterQuery.join(" "),
+            }),
+            JSON.stringify(settings)
+        );
 
         const twitterManager = agent.clients["twitter"];
 
         // load character from body
-        const character = req.body.character;
+
         try {
             validateCharacterConfig(character);
         } catch (e) {

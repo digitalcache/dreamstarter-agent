@@ -7,6 +7,7 @@ import { LensAgentClient } from "@elizaos/client-lens";
 import { SlackClientInterface } from "@elizaos/client-slack";
 import { TelegramClientInterface } from "@elizaos/client-telegram";
 import { TwitterClientInterface } from "@elizaos/client-twitter";
+import forge from "node-forge";
 import {
     AgentRuntime,
     CacheManager,
@@ -385,7 +386,8 @@ function initializeDatabase(dataDir: string) {
 // also adds plugins from character file into the runtime
 export async function initializeClients(
     character: Character,
-    runtime: IAgentRuntime
+    runtime: IAgentRuntime,
+    runtimeSettings?: any
 ) {
     // each client can only register once
     // and if we want two we can explicitly support it
@@ -409,12 +411,41 @@ export async function initializeClients(
         if (telegramClient) clients.telegram = telegramClient;
     }
 
-    // if (clientTypes.includes(Clients.TWITTER)) {
-    //     const twitterClient = await TwitterClientInterface.start(runtime);
-    //     if (twitterClient) {
-    //         clients.twitter = twitterClient;
-    //     }
-    // }
+    if (clientTypes.includes(Clients.TWITTER)) {
+        const twitterClient: any = await TwitterClientInterface.startExternal(
+            runtime,
+            character.settings?.secrets?.TWITTER_EMAIL,
+            character.settings?.secrets?.TWITTER_USERNAME,
+            decryptPassword(character.settings?.secrets?.TWITTER_PASSWORD)
+        );
+        if (
+            twitterClient &&
+            (runtimeSettings?.followProfiles ||
+                runtimeSettings?.processionActions ||
+                runtimeSettings?.schedulingPosts)
+        ) {
+            clients.twitter = twitterClient;
+            const { followProfiles, processionActions, schedulingPosts } =
+                runtimeSettings;
+            twitterClient.search.enableFollow = followProfiles;
+            await twitterClient.search[followProfiles ? "start" : "stop"]();
+
+            twitterClient.post.enableActionProcessing = processionActions;
+            await twitterClient.post[
+                processionActions ? "startProcessingActions" : "stop"
+            ]();
+            if (processionActions) {
+                await twitterClient.interaction.start();
+            } else {
+                await twitterClient.interaction.stop();
+            }
+
+            twitterClient.post.enableScheduledPosts = schedulingPosts;
+            await twitterClient.post[
+                schedulingPosts ? "start" : "stopNewTweets"
+            ]();
+        }
+    }
 
     if (clientTypes.includes(Clients.FARCASTER)) {
         // why is this one different :(
@@ -669,8 +700,6 @@ async function startAgent(
     try {
         character.id ??= stringToUuid(character.name);
         character.username ??= character.name;
-
-        const token = getTokenForProvider(character.modelProvider, character);
         const dataDir = path.join(__dirname, "../data");
 
         if (!fs.existsSync(dataDir)) {
@@ -681,6 +710,7 @@ async function startAgent(
             IDatabaseCacheAdapter;
 
         await db.init();
+        const token = getTokenForProvider(character.modelProvider, character);
 
         const cache = initializeCache(
             process.env.CACHE_STORE ?? CacheStore.DATABASE,
@@ -688,20 +718,37 @@ async function startAgent(
             "",
             db
         ); // "" should be replaced with dir for file system caching. THOUGHTS: might probably make this into an env
+
         const runtime: AgentRuntime = await createAgent(
             character,
             db,
             cache,
             token
         );
-
-        // start services/plugins/process knowledge
         await runtime.initialize();
+        const rooms = await db.getRooms();
+        const room = rooms.find((r: any) => r.id === runtime.agentId);
+        const roomSettings = JSON.parse(room.settings);
+        if (
+            roomSettings &&
+            (roomSettings.followProfiles ||
+                roomSettings.processionActions ||
+                roomSettings.schedulingPosts)
+        ) {
+            const clientSettings = {
+                followProfiles: roomSettings.followProfiles,
+                processionActions: roomSettings.processionActions,
+                schedulingPosts: roomSettings.schedulingPosts,
+            };
+            runtime.clients = await initializeClients(
+                character,
+                runtime,
+                clientSettings
+            );
+        } else {
+            runtime.clients = await initializeClients(character, runtime, null);
+        }
 
-        // start assigned clients
-        runtime.clients = await initializeClients(character, runtime);
-
-        // add to container
         directClient.registerAgent(runtime);
 
         // report to console
@@ -709,6 +756,9 @@ async function startAgent(
 
         return runtime;
     } catch (error) {
+        if (db && character.id) {
+            await db.updateRoomStatus(character.id, "stopped");
+        }
         elizaLogger.error(
             `Error starting agent for character ${character.name}:`,
             error
@@ -740,23 +790,59 @@ const checkPortAvailable = (port: number): Promise<boolean> => {
     });
 };
 
+const decryptPassword = (encryptedPassword: string) => {
+    try {
+        const publicKey = process.env.PASSWORD_PUBLIC_KEY || "";
+        const encrypted = forge.util.decode64(encryptedPassword);
+        const privateKey = forge.pki.privateKeyFromPem(publicKey);
+        const decrypted = privateKey.decrypt(encrypted, "RSA-OAEP", {
+            md: forge.md.sha256.create(),
+            mgf1: {
+                md: forge.md.sha256.create(),
+            },
+        });
+
+        return decrypted;
+    } catch (error) {
+        console.error("Decryption failed:", error);
+        throw new Error("Failed to decrypt password");
+    }
+};
+
 const startAgents = async () => {
     const directClient = new DirectClient();
     const serverPort = 8000;
     const args = parseArguments();
+    let db: IDatabaseAdapter & IDatabaseCacheAdapter;
     let charactersArg = args.characters || args.character;
     let characters = [defaultCharacter];
+    const dataDir = path.join(__dirname, "../data");
 
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    db = initializeDatabase(dataDir) as IDatabaseAdapter &
+        IDatabaseCacheAdapter;
+
+    await db.init();
+    const rooms = await db.getRooms();
     if (charactersArg) {
         characters = await loadCharacters(charactersArg);
     }
 
     try {
-        for (const character of characters) {
-            await startAgent(character, directClient);
+        for (const room of rooms) {
+            if (room.status === "active") {
+                const savedCharacter = JSON.parse(room.character);
+                const savedSettings = JSON.parse(room.settings);
+                const runtime = await startAgent(savedCharacter, directClient);
+                directClient.registerAgent(runtime);
+                await new Promise((resolve) => setTimeout(resolve, 10000));
+            }
         }
     } catch (error) {
-        elizaLogger.error("Error starting agents:", error);
+        elizaLogger.error("Error starting rooms:", error);
     }
 
     // upload some agent functionality into directClient
@@ -765,6 +851,7 @@ const startAgents = async () => {
         const res = await startAgent(character, directClient);
         return res;
     };
+    directClient.db = db;
 
     directClient.start(serverPort);
 

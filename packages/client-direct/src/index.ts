@@ -81,6 +81,7 @@ export class DirectClient {
     private agents: Map<string, AgentRuntime>; // container management
     private server: any; // Store server instance
     public startAgent: Function; // Store startAgent functor
+    public db: any;
 
     constructor() {
         elizaLogger.log("DirectClient constructor");
@@ -631,10 +632,7 @@ export class DirectClient {
                 const encryptedPassword = req.body.password;
                 const tokenAddress = req.body.tokenAddress;
                 const ideaName = req.body.ideaName;
-                const password =
-                    encryptedPassword === "password"
-                        ? "password"
-                        : this.decryptPassword(encryptedPassword);
+                const password = this.decryptPassword(encryptedPassword);
                 const agentId = stringToUuid("new-agent-" + tokenAddress);
                 const dynamicCharacter = req.body.character;
                 let messageExamples = [];
@@ -663,8 +661,8 @@ export class DirectClient {
                     settings: {
                         secrets: {
                             TWITTER_USERNAME: username,
-                            TWITTER_PASSWORD: "password",
-                            TWITTER_EMAIL: "email",
+                            TWITTER_PASSWORD: encryptedPassword,
+                            TWITTER_EMAIL: email,
                         },
                     },
                     system: dynamicCharacter?.system || defaultCharacter.system,
@@ -745,6 +743,14 @@ export class DirectClient {
                     const runtime: AgentRuntime = this.agents.get(agentId);
                     await TwitterClientInterface.stop(runtime);
                     this.unregisterAgent(this.agents.get(agentId));
+                    const rooms = await this.db.getRooms();
+                    const room = rooms.find((r: any) => r.id === agentId);
+                    this.db.updateRoomStatus(
+                        agentId,
+                        "stopped",
+                        room.character,
+                        room.settings
+                    );
                     res.status(200).json({ success: true });
                 } catch (error) {
                     console.log(error);

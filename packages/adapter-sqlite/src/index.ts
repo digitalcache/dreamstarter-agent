@@ -1,7 +1,11 @@
 export * from "./sqliteTables.ts";
 export * from "./sqlite_vec.ts";
 
-import { DatabaseAdapter, IDatabaseCacheAdapter } from "@elizaos/core";
+import {
+    DatabaseAdapter,
+    IDatabaseCacheAdapter,
+    RoomWithStatus,
+} from "@elizaos/core";
 import {
     Account,
     Actor,
@@ -27,6 +31,23 @@ export class SqliteDatabaseAdapter
             | { id: string }
             | undefined;
         return room ? (room.id as UUID) : null;
+    }
+
+    async getRooms(): Promise<RoomWithStatus[] | []> {
+        // First ensure status column exists
+        const sql = "SELECT id, status, character, settings FROM rooms";
+        const rooms = this.db.prepare(sql).all() as {
+            id: UUID;
+            status: string;
+            character: string;
+            settings: string;
+        }[];
+        return rooms.map((room) => ({
+            id: room.id,
+            character: room.character,
+            status: room.status as "active" | "stopped",
+            settings: room.settings,
+        }));
     }
 
     async getParticipantsForAccount(userId: UUID): Promise<Participant[]> {
@@ -574,12 +595,40 @@ export class SqliteDatabaseAdapter
     async createRoom(roomId?: UUID): Promise<UUID> {
         roomId = roomId || (v4() as UUID);
         try {
-            const sql = "INSERT INTO rooms (id) VALUES (?)";
-            this.db.prepare(sql).run(roomId ?? (v4() as UUID));
+            const sql = "INSERT INTO rooms (id, status) VALUES (?, ?)";
+            this.db.prepare(sql).run(roomId ?? (v4() as UUID), "stopped");
         } catch (error) {
             console.log("Error creating room", error);
         }
         return roomId as UUID;
+    }
+
+    async updateRoomStatus(
+        roomId: UUID,
+        status: "active" | "stopped",
+        character?: string,
+        settings?: string
+    ): Promise<void> {
+        try {
+            if (character && settings) {
+                const sql =
+                    "UPDATE rooms SET status = ?, character = ?, settings = ? WHERE id = ?";
+                this.db.prepare(sql).run(status, character, settings, roomId);
+            } else if (character) {
+                const sql =
+                    "UPDATE rooms SET status = ?, character = ? WHERE id = ?";
+                this.db.prepare(sql).run(status, character, roomId);
+            } else if (settings) {
+                const sql =
+                    "UPDATE rooms SET status = ?, settings = ? WHERE id = ?";
+                this.db.prepare(sql).run(status, settings, roomId);
+            } else {
+                const sql = "UPDATE rooms SET status = ? WHERE id = ?";
+                this.db.prepare(sql).run(status, roomId);
+            }
+        } catch (error) {
+            console.log("Error updating room status", error);
+        }
     }
 
     async removeRoom(roomId: UUID): Promise<void> {

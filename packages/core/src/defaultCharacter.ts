@@ -7,7 +7,7 @@ export const defaultCharacter: Character = {
     modelProvider: ModelProviderName.ANTHROPIC,
     settings: {
         modelConfig: {
-            // maxInputTokens: 10000,
+            maxInputTokens: 10000,
         },
         secrets: {},
         voice: {
