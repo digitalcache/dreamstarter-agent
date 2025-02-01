@@ -317,6 +317,106 @@ export class DirectClient {
                 }
             }
         );
+// my example code for this about test it 
+
+    //     this.app.post(
+    // "/:agentId/message",
+    // upload.single("file"),
+    // async (req: express.Request, res: express.Response) => {
+    //     const agentId = req.params.agentId;
+    //     const roomId = stringToUuid(req.body.roomId ?? "default-room-" + agentId);
+    //     const userId = stringToUuid(req.body.userId ?? "user");
+    //     let runtime = this.agents.get(agentId);
+
+    //     // If runtime is null, look for runtime with the same name
+    //     if (!runtime) {
+    //         runtime = Array.from(this.agents.values()).find(
+    //             (a) => a.character.name.toLowerCase() === agentId.toLowerCase()
+    //         );
+    //     }
+
+    //     if (!runtime) {
+    //         res.status(404).send("Agent not found");
+    //         return;
+    //     }
+
+    //     await runtime.ensureConnection(
+    //         userId,
+    //         roomId,
+    //         req.body.userName,
+    //         req.body.name,
+    //         "direct"
+    //     );
+
+    //     const text = req.body.text;
+    //     const tags = req.body.tags || []; // Capture tags from the request
+    //     const messageId = stringToUuid(Date.now().toString());
+    //     const attachments: Media[] = [];
+
+    //     if (req.file) {
+    //         const filePath = path.join(
+    //             process.cwd(),
+    //             "agent",
+    //             "data",
+    //             "uploads",
+    //             req.file.filename
+    //         );
+    //         attachments.push({
+    //             id: Date.now().toString(),
+    //             url: filePath,
+    //             title: req.file.originalname,
+    //             source: "direct",
+    //             description: `Uploaded file: ${req.file.originalname}`,
+    //             text: "",
+    //             contentType: req.file.mimetype,
+    //         });
+    //     }
+
+    //     const content: Content = {
+    //         text,
+    //         attachments,
+    //         source: "direct",
+    //         inReplyTo: undefined,
+    //     };
+
+    //     const userMessage = {
+    //         content,
+    //         userId,
+    //         roomId,
+    //         agentId: runtime.agentId,
+    //         tags, // Include tags in the userMessage
+    //     };
+
+    //     const memory: Memory = {
+    //         id: stringToUuid(messageId + "-" + userId),
+    //         ...userMessage,
+    //         agentId: runtime.agentId,
+    //         userId,
+    //         roomId,
+    //         content,
+    //         createdAt: Date.now(),
+    //     };
+
+    //     await runtime.messageManager.addEmbeddingToMemory(memory);
+    //     await runtime.messageManager.createMemory(memory);
+
+    //     let state = await runtime.composeState(userMessage, {
+    //         agentName: runtime.character.name,
+    //     });
+
+    //     const context = composeContext({
+    //         state,
+    //         template: messageHandlerTemplate,
+    //     });
+
+    //     const response = await generateMessageResponse({
+    //         runtime: runtime,
+    //         context,
+    //         modelClass: ModelClass.LARGE,
+    //     });
+
+    //     if (!response) {
+    //         res.status(500).send("No response
 
         this.app.post(
             "/:agentId/image",
