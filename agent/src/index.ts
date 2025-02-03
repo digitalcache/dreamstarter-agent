@@ -424,9 +424,21 @@ export async function initializeClients(
                 runtimeSettings?.processionActions ||
                 runtimeSettings?.schedulingPosts)
         ) {
-            clients.twitter = twitterClient;
-            const { followProfiles, processionActions, schedulingPosts } =
-                runtimeSettings;
+            const {
+                followProfiles,
+                processionActions,
+                schedulingPosts,
+                postInterval,
+                actionInterval,
+                followInterval,
+            } = runtimeSettings;
+            console.log("POST___", runtimeSettings);
+            twitterClient.search.followInterval = followInterval;
+            twitterClient.post.actionInterval = actionInterval;
+            twitterClient.post.postInterval = postInterval;
+            twitterClient.interaction.twitterPollInterval =
+                actionInterval / 1000;
+
             twitterClient.search.enableFollow = followProfiles;
             await twitterClient.search[followProfiles ? "start" : "stop"]();
 
@@ -444,6 +456,7 @@ export async function initializeClients(
             await twitterClient.post[
                 schedulingPosts ? "start" : "stopNewTweets"
             ]();
+            clients.twitter = twitterClient;
         }
     }
 
@@ -739,6 +752,9 @@ async function startAgent(
                 followProfiles: roomSettings.followProfiles,
                 processionActions: roomSettings.processionActions,
                 schedulingPosts: roomSettings.schedulingPosts,
+                postInterval: roomSettings.postInterval,
+                actionInterval: roomSettings.actionInterval,
+                followInterval: roomSettings.followInterval,
             };
             runtime.clients = await initializeClients(
                 character,
@@ -771,25 +787,6 @@ async function startAgent(
     }
 }
 
-const checkPortAvailable = (port: number): Promise<boolean> => {
-    return new Promise((resolve) => {
-        const server = net.createServer();
-
-        server.once("error", (err: NodeJS.ErrnoException) => {
-            if (err.code === "EADDRINUSE") {
-                resolve(false);
-            }
-        });
-
-        server.once("listening", () => {
-            server.close();
-            resolve(true);
-        });
-
-        server.listen(port);
-    });
-};
-
 const decryptPassword = (encryptedPassword: string) => {
     try {
         const publicKey = process.env.PASSWORD_PUBLIC_KEY || "";
@@ -812,10 +809,7 @@ const decryptPassword = (encryptedPassword: string) => {
 const startAgents = async () => {
     const directClient = new DirectClient();
     const serverPort = 8000;
-    const args = parseArguments();
     let db: IDatabaseAdapter & IDatabaseCacheAdapter;
-    let charactersArg = args.characters || args.character;
-    let characters = [defaultCharacter];
     const dataDir = path.join(__dirname, "../data");
 
     if (!fs.existsSync(dataDir)) {
@@ -827,9 +821,6 @@ const startAgents = async () => {
 
     await db.init();
     const rooms = await db.getRooms();
-    if (charactersArg) {
-        characters = await loadCharacters(charactersArg);
-    }
 
     try {
         for (const room of rooms) {

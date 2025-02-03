@@ -9,6 +9,7 @@ export class TwitterSearchClient {
     numFollowed: number;
     timeoutId: NodeJS.Timeout | null;
     private enableFollow: boolean;
+    followInterval: number;
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
@@ -17,6 +18,7 @@ export class TwitterSearchClient {
         this.twitterUsername = this.runtime.getSetting("TWITTER_USERNAME");
         this.timeoutId = null;
         this.enableFollow = false;
+        this.followInterval = 24 * 60 * 60 * 1000;
     }
 
     async start() {
@@ -27,7 +29,7 @@ export class TwitterSearchClient {
                 this.engageWithSearchTerms();
                 this.timeoutId = setTimeout(
                     () => engageWithSearchTermsLoop(),
-                    24 * 60 * 60 * 1000
+                    this.followInterval
                 );
                 elizaLogger.log(`Next twitter follow scheduled in 1 day`);
             } catch (error) {
@@ -91,7 +93,7 @@ export class TwitterSearchClient {
                     );
                     this.numFollowed++;
                     await new Promise((resolve) =>
-                        setTimeout(resolve, 7200000)
+                        setTimeout(resolve, 5 * 60 * 1000)
                     );
                 }
             }

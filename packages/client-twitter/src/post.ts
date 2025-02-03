@@ -34,8 +34,8 @@ const twitterPostTemplate = `
 
 # Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
 Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
-Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than 275 characters (to ensure it fits within Twitter's limits). Use \\n\\n (double spaces) between statements if there are multiple statements in your response. If there is a URL in the response, prioritize that and reframe sentence.
 Your response should be 1, 2, or 3 sentences, but definitely include the URL if provided.
+Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than 275 characters (to ensure it fits within Twitter's limits). Use \\n\\n (double spaces) between statements if there are multiple statements in your response. If there is a URL in the response, prioritize that and reframe sentence but keep under 275 characters.
 `;
 
 export const twitterActionTemplate =
@@ -71,82 +71,82 @@ Tweet:
 /**
  * Truncate text to fit within the Twitter character limit, ensuring it ends at a complete sentence.
  */
-function truncateToCompleteSentence(
-    text: string,
-    maxTweetLength: number = 280
-): string {
-    if (text.length <= maxTweetLength) {
-        return text;
-    }
+// function truncateToCompleteSentence(
+//     text: string,
+//     maxTweetLength: number = 280
+// ): string {
+//     if (text.length <= maxTweetLength) {
+//         return text;
+//     }
 
-    // Regular expression to match URLs
-    // Matches common URL patterns including various TLDs
-    const urlRegex =
-        /https?:\/\/[^\s]+?\.(?:com|org|net|edu|gov|xyz|io|ai|dev|co|me|info|blog|app|cloud|tech)[^\s]*/gi;
+//     // Regular expression to match URLs
+//     // Matches common URL patterns including various TLDs
+//     const urlRegex =
+//         /https?:\/\/[^\s]+?\.(?:com|org|net|edu|gov|xyz|io|ai|dev|co|me|info|blog|app|cloud|tech)[^\s]*/gi;
 
-    // Find all URLs in the text
-    const urls = text.match(urlRegex) || [];
+//     // Find all URLs in the text
+//     const urls = text.match(urlRegex) || [];
 
-    // Replace URLs with placeholders to protect them during truncation
-    let processedText = text;
-    const urlMap = new Map<string, string>();
+//     // Replace URLs with placeholders to protect them during truncation
+//     let processedText = text;
+//     const urlMap = new Map<string, string>();
 
-    urls.forEach((url, index) => {
-        const placeholder = `__URL_${index}__`;
-        urlMap.set(placeholder, url);
-        processedText = processedText.replace(url, placeholder);
-    });
+//     urls.forEach((url, index) => {
+//         const placeholder = `__URL_${index}__`;
+//         urlMap.set(placeholder, url);
+//         processedText = processedText.replace(url, placeholder);
+//     });
 
-    // Find the last sentence break before maxTweetLength
-    let truncatedText = processedText;
-    const sentenceBreaks = [...processedText.matchAll(/[.!?]+(?=\s|$)/g)];
-    const lastValidBreak = sentenceBreaks
-        .reverse()
-        .find(
-            (match) => match.index !== undefined && match.index < maxTweetLength
-        );
+//     // Find the last sentence break before maxTweetLength
+//     let truncatedText = processedText;
+//     const sentenceBreaks = [...processedText.matchAll(/[.!?]+(?=\s|$)/g)];
+//     const lastValidBreak = sentenceBreaks
+//         .reverse()
+//         .find(
+//             (match) => match.index !== undefined && match.index < maxTweetLength
+//         );
 
-    if (lastValidBreak?.index !== undefined) {
-        // Truncate at the last valid sentence break
-        truncatedText = processedText.slice(0, lastValidBreak.index + 1).trim();
-    } else {
-        // If no sentence break found, try to break at last space
-        const lastSpace = processedText.lastIndexOf(" ", maxTweetLength - 3);
-        if (lastSpace !== -1) {
-            truncatedText = processedText.slice(0, lastSpace).trim() + "...";
-        } else {
-            // Hard truncate as last resort
-            truncatedText =
-                processedText.slice(0, maxTweetLength - 3).trim() + "...";
-        }
-    }
+//     if (lastValidBreak?.index !== undefined) {
+//         // Truncate at the last valid sentence break
+//         truncatedText = processedText.slice(0, lastValidBreak.index + 1).trim();
+//     } else {
+//         // If no sentence break found, try to break at last space
+//         const lastSpace = processedText.lastIndexOf(" ", maxTweetLength - 3);
+//         if (lastSpace !== -1) {
+//             truncatedText = processedText.slice(0, lastSpace).trim() + "...";
+//         } else {
+//             // Hard truncate as last resort
+//             truncatedText =
+//                 processedText.slice(0, maxTweetLength - 3).trim() + "...";
+//         }
+//     }
 
-    // Restore URLs in the truncated text
-    urlMap.forEach((url, placeholder) => {
-        truncatedText = truncatedText.replace(placeholder, url);
-    });
+//     // Restore URLs in the truncated text
+//     urlMap.forEach((url, placeholder) => {
+//         truncatedText = truncatedText.replace(placeholder, url);
+//     });
 
-    // Final length check after URL restoration
-    if (truncatedText.length > maxTweetLength) {
-        // If still too long, do a hard truncate preserving as much as possible
-        const lastUrl = urls.find((url) => truncatedText.includes(url));
+//     // Final length check after URL restoration
+//     if (truncatedText.length > maxTweetLength) {
+//         // If still too long, do a hard truncate preserving as much as possible
+//         const lastUrl = urls.find((url) => truncatedText.includes(url));
 
-        if (
-            lastUrl &&
-            truncatedText.indexOf(lastUrl) + lastUrl.length > maxTweetLength - 3
-        ) {
-            // If a URL is causing the overflow, truncate before the URL
-            truncatedText =
-                truncatedText.slice(0, truncatedText.indexOf(lastUrl)).trim() +
-                "...";
-        } else {
-            // Otherwise, do a hard truncate
-            truncatedText = truncatedText.slice(0, maxTweetLength - 3) + "...";
-        }
-    }
+//         if (
+//             lastUrl &&
+//             truncatedText.indexOf(lastUrl) + lastUrl.length > maxTweetLength - 3
+//         ) {
+//             // If a URL is causing the overflow, truncate before the URL
+//             truncatedText =
+//                 truncatedText.slice(0, truncatedText.indexOf(lastUrl)).trim() +
+//                 "...";
+//         } else {
+//             // Otherwise, do a hard truncate
+//             truncatedText = truncatedText.slice(0, maxTweetLength - 3) + "...";
+//         }
+//     }
 
-    return truncatedText;
-}
+//     return truncatedText;
+// }
 
 export class TwitterPostClient {
     client: ClientBase;
@@ -161,6 +161,8 @@ export class TwitterPostClient {
     private isDryRun: boolean;
     enableActionProcessing: boolean;
     enableScheduledPosts: boolean;
+    postInterval: number;
+    actionInterval: number;
     private tweetGenerationTimeoutId: NodeJS.Timeout | null;
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
@@ -175,6 +177,8 @@ export class TwitterPostClient {
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
         this.tweetGenerationTimeoutId = null;
         this.enableScheduledPosts = false;
+        this.postInterval = 480;
+        this.actionInterval = 7200000;
 
         // Log configuration on initialization
         elizaLogger.log("Twitter Client Configuration:");
@@ -183,14 +187,12 @@ export class TwitterPostClient {
             `- Dry Run Mode: ${this.isDryRun ? "enabled" : "disabled"}`
         );
         elizaLogger.log(
-            `- Post Interval: ${this.client.twitterConfig.POST_INTERVAL_MIN}-${this.client.twitterConfig.POST_INTERVAL_MAX} minutes`
+            `- Post Interval: ${this.postInterval}-${this.postInterval + 20} minutes`
         );
         elizaLogger.log(
             `- Action Processing: ${this.enableActionProcessing ? "enabled" : "disabled"}`
         );
-        elizaLogger.log(
-            `- Action Interval: ${this.client.twitterConfig.ACTION_INTERVAL} seconds`
-        );
+        elizaLogger.log(`- Action Interval: ${this.actionInterval} seconds`);
         elizaLogger.log(
             `- Post Immediately: ${this.client.twitterConfig.POST_IMMEDIATELY ? "enabled" : "disabled"}`
         );
@@ -221,10 +223,9 @@ export class TwitterPostClient {
             const lastPost = await this.runtime.cacheManager.get<{
                 timestamp: number;
             }>("twitter/" + this.twitterUsername + "/lastPost");
-
             const lastPostTimestamp = lastPost?.timestamp ?? 0;
-            const minMinutes = this.client.twitterConfig.POST_INTERVAL_MIN;
-            const maxMinutes = this.client.twitterConfig.POST_INTERVAL_MAX;
+            const minMinutes = this.postInterval;
+            const maxMinutes = this.postInterval + 20;
             const randomMinutes =
                 Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) +
                 minMinutes;
@@ -266,7 +267,7 @@ export class TwitterPostClient {
     startProcessingActions() {
         this.enableActionProcessing = true;
         const processActionsLoop = async () => {
-            const actionInterval = this.client.twitterConfig.ACTION_INTERVAL; // Defaults to 5 minutes
+            const actionInterval = this.actionInterval;
             while (this.enableActionProcessing) {
                 try {
                     const results = await this.processTweetActions();
@@ -397,15 +398,11 @@ export class TwitterPostClient {
 
             if (noteTweetResult.errors && noteTweetResult.errors.length > 0) {
                 // Note Tweet failed due to authorization. Falling back to standard Tweet.
-                const truncateContent = truncateToCompleteSentence(
-                    content,
-                    this.client.twitterConfig.MAX_TWEET_LENGTH
-                );
-                return await this.sendStandardTweet(
-                    client,
-                    truncateContent,
-                    tweetId
-                );
+                // const truncateContent = truncateToCompleteSentence(
+                //     content,
+                //     this.client.twitterConfig.MAX_TWEET_LENGTH
+                // );
+                return await this.sendStandardTweet(client, content, tweetId);
             } else {
                 return noteTweetResult.data.notetweet_create.tweet_results
                     .result;
@@ -771,13 +768,8 @@ export class TwitterPostClient {
                     }
 
                     if (
-                        (actionResponse.reply &&
-                            !tweet.text.includes(`@${this.twitterUsername}`) &&
-                            !this.isHighlyRelevant(tweet)) ||
-                        (actionResponse.quote &&
-                            !this.isHighlyRelevant(tweet)) ||
-                        (actionResponse.retweet &&
-                            !this.isHighlyRelevant(tweet))
+                        actionResponse.reply &&
+                        !tweet.text.includes(`@${this.twitterUsername}`)
                     ) {
                         elizaLogger.log(
                             `Tweet ${tweet.id} didn't pass additional relevance checks`
@@ -804,6 +796,14 @@ export class TwitterPostClient {
                                 elizaLogger.log(`Liked tweet ${tweet.id}`);
                                 this.numLikes++;
                                 await this.updateActionCounter("like");
+                                await new Promise(
+                                    (resolve) =>
+                                        setTimeout(
+                                            resolve,
+                                            this.actionInterval /
+                                                this.ACTION_LIMITS.like.max
+                                        ) // now in ms
+                                );
                             }
                         } catch (error) {
                             elizaLogger.error(
@@ -1181,34 +1181,6 @@ export class TwitterPostClient {
         }
     }
 
-    // Helper method to check if a tweet is highly relevant
-    private isHighlyRelevant(tweet: Tweet): boolean {
-        // Get keywords and topics from the agent's character profile
-        const relevantTopics = this.runtime.character.topics || [];
-        const keywords = this.runtime.character.twitterQuery.split(" ") || [];
-
-        // Convert tweet text to lowercase for case-insensitive matching
-        const tweetText = tweet.text.toLowerCase();
-
-        // Check for direct mentions
-        if (tweetText.includes(`@${this.twitterUsername.toLowerCase()}`)) {
-            return true;
-        }
-
-        // Check for highly relevant topics
-        const topicMatches = relevantTopics.filter((topic) =>
-            tweetText.includes(topic.toLowerCase())
-        ).length;
-
-        // Check for keyword matches
-        const keywordMatches = keywords.filter((keyword) =>
-            tweetText.includes(keyword.toLowerCase())
-        ).length;
-
-        // Consider tweet highly relevant if it matches multiple topics/keywords
-        return topicMatches >= 2 || keywordMatches >= 3;
-    }
-
     // Helper method to create memory for skipped tweets
     private async createSkippedTweetMemory(tweet: Tweet, roomId: UUID) {
         await this.runtime.ensureRoomExists(roomId);
@@ -1283,10 +1255,10 @@ export class TwitterPostClient {
     };
 
     private readonly ACTION_LIMITS = {
-        like: { max: 2, windowHours: 3 },
-        retweet: { max: 3, windowHours: 3 },
-        reply: { max: 3, windowHours: 3 },
-        quote: { max: 3, windowHours: 3 },
+        like: { max: 8, windowHours: 3 },
+        retweet: { max: 5, windowHours: 3 },
+        reply: { max: 10, windowHours: 3 },
+        quote: { max: 10, windowHours: 3 },
     };
 
     private canPerformAction(actionType: string): boolean {

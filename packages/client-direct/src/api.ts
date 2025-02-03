@@ -102,6 +102,9 @@ export function createApiRouter(
                 schedulingPosts:
                     twitterClient?.post?.enableScheduledPosts || false,
                 followProfiles: twitterClient?.search?.enableFollow || false,
+                postInterval: twitterClient?.post?.postInterval || 0,
+                actionInterval: twitterClient?.post?.actionInterval || 0,
+                followInterval: twitterClient?.search?.followInterval || 0,
                 numTweets: twitterClient?.post?.numTweets || 0,
                 numLikes: twitterClient?.post?.numLikes || 0,
                 numRetweets: twitterClient?.post?.numRetweets || 0,
@@ -118,11 +121,17 @@ export function createApiRouter(
         const schedulingPosts = req.body.schedulingPosts;
         const followProfiles = req.body.followProfiles;
         const processionActions = req.body.processionActions;
+        const postInterval = req.body.postInterval;
+        const actionInterval = req.body.actionInterval;
+        const followInterval = req.body.followInterval;
         const character = req.body.character;
         const settings = {
             schedulingPosts,
             followProfiles,
             processionActions,
+            postInterval,
+            actionInterval,
+            followInterval,
         };
         const agent: AgentRuntime = agents.get(agentId);
         await directClient.db.updateRoomStatus(
@@ -155,11 +164,31 @@ export function createApiRouter(
         };
 
         if (twitterManager) {
+            if (twitterManager.search.followInterval !== followInterval) {
+                twitterManager.search.followInterval = followInterval;
+                if (followProfiles) {
+                    await twitterManager.search.stop();
+                    await twitterManager.search.start();
+                }
+            }
+
             if (twitterManager.search.enableFollow !== followProfiles) {
                 twitterManager.search.enableFollow = followProfiles;
                 await twitterManager.search[
                     followProfiles ? "start" : "stop"
                 ]();
+            }
+
+            if (twitterManager.post.actionInterval !== actionInterval) {
+                twitterManager.post.actionInterval = actionInterval;
+                twitterManager.interaction.twitterPollInterval =
+                    actionInterval / 1000;
+                if (processionActions) {
+                    await twitterManager.post.stop();
+                    await twitterManager.post.startProcessingActions();
+                    await twitterManager.interaction.stop();
+                    await twitterManager.interaction.start();
+                }
             }
 
             if (
@@ -176,13 +205,20 @@ export function createApiRouter(
                 }
             }
 
+            if (twitterManager.post.postInterval !== postInterval) {
+                twitterManager.post.postInterval = postInterval;
+                if (schedulingPosts) {
+                    await twitterManager.post.stopNewTweets();
+                    await twitterManager.post.start();
+                }
+            }
+
             if (twitterManager.post.enableScheduledPosts !== schedulingPosts) {
                 twitterManager.post.enableScheduledPosts = schedulingPosts;
                 await twitterManager.post[
                     schedulingPosts ? "start" : "stopNewTweets"
                 ]();
             }
-
             elizaLogger.log(`${character.name}  - new settings applied`);
         }
 

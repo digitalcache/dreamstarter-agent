@@ -100,12 +100,14 @@ export class TwitterInteractionClient {
     runtime: IAgentRuntime;
     numReplies: number;
     private tweetInteractionTimeoutId: NodeJS.Timeout | null;
+    twitterPollInterval: number;
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
         this.runtime = runtime;
         this.numReplies = 0;
         this.tweetInteractionTimeoutId = null;
+        this.twitterPollInterval = 7200;
     }
 
     async start() {
