@@ -715,6 +715,7 @@ export class DirectClient {
                             username,
                             password
                         );
+
                     if (twitterClient) {
                         runtime.clients.twitter = twitterClient;
                         res.status(200).json({

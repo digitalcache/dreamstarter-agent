@@ -1,4 +1,4 @@
-import { Tweet } from "agent-twitter-client";
+import { SearchMode, Tweet } from "agent-twitter-client";
 import {
     composeContext,
     generateText,
@@ -161,9 +161,11 @@ export class TwitterPostClient {
     private isDryRun: boolean;
     enableActionProcessing: boolean;
     enableScheduledPosts: boolean;
+    twitterTargetUsers: string;
     postInterval: number;
     actionInterval: number;
     private tweetGenerationTimeoutId: NodeJS.Timeout | null;
+    private actionProcessingTimeoutId: NodeJS.Timeout | null;
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
@@ -176,6 +178,8 @@ export class TwitterPostClient {
         this.twitterUsername = this.runtime.getSetting("TWITTER_USERNAME");
         this.isDryRun = this.client.twitterConfig.TWITTER_DRY_RUN;
         this.tweetGenerationTimeoutId = null;
+        this.actionProcessingTimeoutId = null;
+        this.twitterTargetUsers = "";
         this.enableScheduledPosts = false;
         this.postInterval = 480;
         this.actionInterval = 7200000;
@@ -199,11 +203,6 @@ export class TwitterPostClient {
         elizaLogger.log(
             `- Search Enabled: ${this.client.twitterConfig.TWITTER_SEARCH_ENABLE ? "enabled" : "disabled"}`
         );
-
-        const targetUsers = this.client.twitterConfig.TWITTER_TARGET_USERS;
-        if (targetUsers) {
-            elizaLogger.log(`- Target Users: ${targetUsers}`);
-        }
 
         if (this.isDryRun) {
             elizaLogger.log(
@@ -267,28 +266,29 @@ export class TwitterPostClient {
     startProcessingActions() {
         this.enableActionProcessing = true;
         const processActionsLoop = async () => {
-            const actionInterval = this.actionInterval;
-            while (this.enableActionProcessing) {
-                try {
-                    const results = await this.processTweetActions();
-                    if (results) {
-                        elizaLogger.log(`Processed ${results.length} tweets`);
-                        elizaLogger.log(
-                            `Next action processing scheduled in ${actionInterval / 1000} seconds`
-                        );
-                        // Wait for the full interval before next processing
-                        await new Promise(
-                            (resolve) => setTimeout(resolve, actionInterval) // now in ms
-                        );
-                    }
-                } catch (error) {
-                    elizaLogger.error(
-                        "Error in action processing loop:",
-                        error
+            if (!this.enableActionProcessing) {
+                elizaLogger.log("Action processing stopped");
+                return;
+            }
+
+            try {
+                const results = await this.processTweetActions();
+                if (results) {
+                    elizaLogger.log(`Processed ${results.length} tweets`);
+                    elizaLogger.log(
+                        `Next action processing scheduled in ${this.actionInterval / 1000} seconds`
                     );
-                    // Add exponential backoff on error
-                    await new Promise((resolve) => setTimeout(resolve, 30000)); // Wait 30s on error
                 }
+            } catch (error) {
+                elizaLogger.error("Error in action processing loop:", error);
+            }
+
+            // Only schedule next iteration if processing is still enabled
+            if (this.enableActionProcessing) {
+                this.actionProcessingTimeoutId = setTimeout(
+                    processActionsLoop,
+                    this.actionInterval
+                );
             }
         };
         if (!this.isDryRun) {
@@ -313,8 +313,12 @@ export class TwitterPostClient {
 
     async stop() {
         // Stop action processing
-        elizaLogger.log("Action processing stopped");
         this.enableActionProcessing = false;
+        if (this.actionProcessingTimeoutId) {
+            clearTimeout(this.actionProcessingTimeoutId);
+            this.actionProcessingTimeoutId = null;
+        }
+        elizaLogger.log("Action processing stopped");
     }
 
     createTweetObject(
@@ -698,6 +702,76 @@ export class TwitterPostClient {
                 this.runtime.character.name,
                 "twitter"
             );
+
+            if (this.twitterTargetUsers) {
+                if (!this.enableActionProcessing) {
+                    return;
+                }
+                const TARGET_USERS = this.twitterTargetUsers.split(",");
+
+                elizaLogger.log("Processing target users:", TARGET_USERS);
+
+                if (TARGET_USERS.length > 0) {
+                    // Create a map to store tweets by user
+                    const tweetsByUser = new Map<string, Tweet[]>();
+
+                    // Fetch tweets from all target users
+                    for (const username of TARGET_USERS) {
+                        try {
+                            const userTweets = (
+                                await this.client.twitterClient.fetchSearchTweets(
+                                    `from:${username}`,
+                                    5,
+                                    SearchMode.Latest
+                                )
+                            ).tweets;
+
+                            if (userTweets.length > 0) {
+                                tweetsByUser.set(username, userTweets);
+                                elizaLogger.log(
+                                    `Found ${userTweets.length} valid tweets from ${username}`
+                                );
+                            }
+                        } catch (error) {
+                            elizaLogger.error(
+                                `Error fetching tweets for ${username}:`,
+                                error
+                            );
+                            continue;
+                        }
+                    }
+
+                    for (const [username, tweets] of tweetsByUser) {
+                        if (!this.enableActionProcessing) {
+                            break;
+                        }
+                        if (tweets.length > 0) {
+                            for (const tweet of tweets) {
+                                await this.client.twitterClient.likeTweet(
+                                    tweet.id
+                                );
+                                elizaLogger.log(`Liked tweet ${tweet.id}`);
+                                this.numLikes++;
+                                await this.updateActionCounter("like");
+                                await new Promise(
+                                    (resolve) =>
+                                        setTimeout(
+                                            resolve,
+                                            this.actionInterval /
+                                                this.ACTION_LIMITS.like.max
+                                        ) // now in ms
+                                );
+                            }
+
+                            elizaLogger.log(`Liking tweet from ${username}}`);
+                        }
+                    }
+                }
+            } else {
+                elizaLogger.log(
+                    "No target users configured, processing only mentions"
+                );
+            }
 
             const homeTimeline = await this.client.fetchTimelineForActions(10);
             const results = [];

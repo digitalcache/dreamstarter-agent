@@ -94,6 +94,7 @@ export function createApiRouter(
             id: agent.agentId,
             character: {
                 ...agent.character,
+                secrets: {},
                 twitterQuery: agent?.character?.twitterQuery.split(" ") || [],
             },
             twitter: {
@@ -103,6 +104,8 @@ export function createApiRouter(
                     twitterClient?.post?.enableScheduledPosts || false,
                 followProfiles: twitterClient?.search?.enableFollow || false,
                 postInterval: twitterClient?.post?.postInterval || 0,
+                twitterTargetUsers:
+                    twitterClient?.post?.twitterTargetUsers || "",
                 actionInterval: twitterClient?.post?.actionInterval || 0,
                 followInterval: twitterClient?.search?.followInterval || 0,
                 numTweets: twitterClient?.post?.numTweets || 0,
@@ -121,6 +124,7 @@ export function createApiRouter(
         const schedulingPosts = req.body.schedulingPosts;
         const followProfiles = req.body.followProfiles;
         const processionActions = req.body.processionActions;
+        const twitterTargetUsers = req.body.twitterTargetUsers;
         const postInterval = req.body.postInterval;
         const actionInterval = req.body.actionInterval;
         const followInterval = req.body.followInterval;
@@ -130,15 +134,19 @@ export function createApiRouter(
             followProfiles,
             processionActions,
             postInterval,
+            twitterTargetUsers,
             actionInterval,
             followInterval,
         };
         const agent: AgentRuntime = agents.get(agentId);
+        const rooms = await directClient.db.getRooms();
+        const room = rooms.find((room) => room.id === agentId);
         await directClient.db.updateRoomStatus(
             agent.agentId,
             "active",
             JSON.stringify({
                 ...character,
+                settings: JSON.parse(room.character).settings,
                 twitterQuery: character.twitterQuery.join(" "),
             }),
             JSON.stringify(settings)
@@ -188,6 +196,14 @@ export function createApiRouter(
                     await twitterManager.post.startProcessingActions();
                     await twitterManager.interaction.stop();
                     await twitterManager.interaction.start();
+                }
+            }
+
+            if (twitterManager.post.twitterTargetUsers !== twitterTargetUsers) {
+                twitterManager.post.twitterTargetUsers = twitterTargetUsers;
+                if (processionActions) {
+                    await twitterManager.post.stop();
+                    await twitterManager.post.startProcessingActions();
                 }
             }
 

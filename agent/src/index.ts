@@ -411,7 +411,7 @@ export async function initializeClients(
         if (telegramClient) clients.telegram = telegramClient;
     }
 
-    if (clientTypes.includes(Clients.TWITTER)) {
+    if (clientTypes.includes(Clients.TWITTER) && runtimeSettings) {
         const twitterClient: any = await TwitterClientInterface.startExternal(
             runtime,
             character.settings?.secrets?.TWITTER_EMAIL,
@@ -431,11 +431,13 @@ export async function initializeClients(
                 postInterval,
                 actionInterval,
                 followInterval,
+                twitterTargetUsers,
             } = runtimeSettings;
             console.log("POST___", runtimeSettings);
             twitterClient.search.followInterval = followInterval;
             twitterClient.post.actionInterval = actionInterval;
             twitterClient.post.postInterval = postInterval;
+            twitterClient.post.twitterTargetUsers = twitterTargetUsers;
             twitterClient.interaction.twitterPollInterval =
                 actionInterval / 1000;
 
@@ -753,6 +755,7 @@ async function startAgent(
                 processionActions: roomSettings.processionActions,
                 schedulingPosts: roomSettings.schedulingPosts,
                 postInterval: roomSettings.postInterval,
+                twitterTargetUsers: roomSettings.twitterTargetUsers,
                 actionInterval: roomSettings.actionInterval,
                 followInterval: roomSettings.followInterval,
             };
@@ -763,6 +766,22 @@ async function startAgent(
             );
         } else {
             runtime.clients = await initializeClients(character, runtime, null);
+            await db.updateRoomStatus(
+                runtime.agentId,
+                "active",
+                JSON.stringify({
+                    ...character,
+                }),
+                JSON.stringify({
+                    schedulingPosts: true,
+                    followProfiles: false,
+                    processionActions: false,
+                    actionInterval: 7200000,
+                    followInterval: 24 * 60 * 60 * 1000,
+                    postInterval: 480,
+                    twitterTargetUsers: "",
+                })
+            );
         }
 
         directClient.registerAgent(runtime);
@@ -826,7 +845,6 @@ const startAgents = async () => {
         for (const room of rooms) {
             if (room.status === "active") {
                 const savedCharacter = JSON.parse(room.character);
-                const savedSettings = JSON.parse(room.settings);
                 const runtime = await startAgent(savedCharacter, directClient);
                 directClient.registerAgent(runtime);
                 await new Promise((resolve) => setTimeout(resolve, 10000));
