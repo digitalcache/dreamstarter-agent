@@ -708,7 +708,7 @@ export class DirectClient {
                 );
                 try {
                     await TwitterClientInterface.stop(runtime);
-                    const twitterClient: any =
+                    const { loginSuccess, manager: twitterClient }: any =
                         await TwitterClientInterface.startExternal(
                             runtime,
                             email,
@@ -716,16 +716,23 @@ export class DirectClient {
                             password
                         );
 
-                    if (twitterClient) {
+                    if (twitterClient && loginSuccess) {
                         runtime.clients.twitter = twitterClient;
                         res.status(200).json({
                             success: true,
                             agentId: runtime.agentId,
                         });
                     }
+                    if (!loginSuccess) {
+                        this.unregisterAgent(this.agents.get(agentId));
+                        res.status(403).json({
+                            success: false,
+                            message:
+                                "Failed to start client. Check your credentials.",
+                        });
+                    }
                 } catch (error) {
                     console.log(error);
-                    await TwitterClientInterface.stop(runtime);
                     this.unregisterAgent(this.agents.get(agentId));
                     res.status(403).json({
                         success: false,

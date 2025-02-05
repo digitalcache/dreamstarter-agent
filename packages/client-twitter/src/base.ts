@@ -212,7 +212,7 @@ export class ClientBase extends EventEmitter {
                 elizaLogger.error(
                     "Max retries reached. Exiting login process."
                 );
-                throw new Error("Twitter login failed after maximum retries.");
+                return false;
             }
 
             await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -240,6 +240,7 @@ export class ClientBase extends EventEmitter {
 
         await this.loadLatestCheckedTweetId();
         await this.populateTimeline();
+        return true;
     }
 
     async fetchOwnPosts(count: number): Promise<Tweet[]> {

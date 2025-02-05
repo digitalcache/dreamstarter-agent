@@ -394,6 +394,7 @@ export async function initializeClients(
     const clients: Record<string, any> = {};
     const clientTypes: string[] =
         character.clients?.map((str) => str.toLowerCase()) || [];
+    let twitterFailed = false;
     elizaLogger.log("initializeClients", clientTypes, "for", character.name);
 
     if (clientTypes.includes(Clients.DIRECT)) {
@@ -411,15 +412,21 @@ export async function initializeClients(
         if (telegramClient) clients.telegram = telegramClient;
     }
 
-    if (clientTypes.includes(Clients.TWITTER) && runtimeSettings) {
-        const twitterClient: any = await TwitterClientInterface.startExternal(
-            runtime,
-            character.settings?.secrets?.TWITTER_EMAIL,
-            character.settings?.secrets?.TWITTER_USERNAME,
-            decryptPassword(character.settings?.secrets?.TWITTER_PASSWORD)
-        );
+    if (clientTypes.includes(Clients.TWITTER)) {
+        const { loginSuccess, manager: twitterClient }: any =
+            await TwitterClientInterface.startExternal(
+                runtime,
+                character.settings?.secrets?.TWITTER_EMAIL,
+                character.settings?.secrets?.TWITTER_USERNAME,
+                decryptPassword(character.settings?.secrets?.TWITTER_PASSWORD)
+            );
+        if (!loginSuccess) {
+            twitterFailed = true;
+        }
         if (
             twitterClient &&
+            runtimeSettings &&
+            loginSuccess &&
             (runtimeSettings?.followProfiles ||
                 runtimeSettings?.processionActions ||
                 runtimeSettings?.schedulingPosts)
@@ -517,7 +524,10 @@ export async function initializeClients(
         }
     }
 
-    return clients;
+    return {
+        twitterFailed,
+        clients,
+    };
 }
 
 function getSecret(character: Character, secret: string) {
@@ -759,29 +769,51 @@ async function startAgent(
                 actionInterval: roomSettings.actionInterval,
                 followInterval: roomSettings.followInterval,
             };
-            runtime.clients = await initializeClients(
+            const { clients } = await initializeClients(
                 character,
                 runtime,
                 clientSettings
             );
+            runtime.clients = clients;
         } else {
-            runtime.clients = await initializeClients(character, runtime, null);
-            await db.updateRoomStatus(
-                runtime.agentId,
-                "active",
-                JSON.stringify({
-                    ...character,
-                }),
-                JSON.stringify({
-                    schedulingPosts: true,
-                    followProfiles: false,
-                    processionActions: false,
-                    actionInterval: 7200000,
-                    followInterval: 24 * 60 * 60 * 1000,
-                    postInterval: 480,
-                    twitterTargetUsers: "",
-                })
-            );
+            try {
+                const { clients, twitterFailed } = await initializeClients(
+                    character,
+                    runtime,
+                    null
+                );
+                if (!twitterFailed) {
+                    runtime.clients = clients;
+                    await db.updateRoomStatus(
+                        runtime.agentId,
+                        "active",
+                        JSON.stringify({
+                            ...character,
+                        }),
+                        JSON.stringify({
+                            schedulingPosts: true,
+                            followProfiles: false,
+                            processionActions: false,
+                            actionInterval: 7200000,
+                            followInterval: 24 * 60 * 60 * 1000,
+                            postInterval: 480,
+                            twitterTargetUsers: "",
+                        })
+                    );
+                } else {
+                    elizaLogger.error(
+                        `Error initializing clients for ${character.name}:`
+                    );
+                    await db.updateRoomStatus(character.id, "stopped");
+                }
+            } catch (error) {
+                elizaLogger.error(
+                    `Error initializing clients for ${character.name}:`,
+                    error
+                );
+                await db.updateRoomStatus(character.id, "stopped");
+                throw error;
+            }
         }
 
         directClient.registerAgent(runtime);

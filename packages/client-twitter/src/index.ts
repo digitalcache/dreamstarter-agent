@@ -46,7 +46,7 @@ export const TwitterClientInterface: TwitterClient = {
             await validateTwitterConfig(runtime);
         const manager = new TwitterManager(runtime, twitterConfig);
 
-        await manager.client.init(email, username, password);
+        const status = await manager.client.init(email, username, password);
 
         // await manager.post.start();
 
@@ -54,7 +54,10 @@ export const TwitterClientInterface: TwitterClient = {
 
         // await manager.search.start();
 
-        return manager;
+        return {
+            loginSuccess: status,
+            manager: manager,
+        };
     },
     async start(runtime: IAgentRuntime) {
         console.log(runtime);
