@@ -886,33 +886,32 @@ export class TwitterPostClient {
                             );
                         }
                     }
-
-                    if (
-                        actionResponse.retweet &&
-                        this.canPerformAction("retweet")
-                    ) {
-                        try {
-                            if (this.isDryRun) {
-                                elizaLogger.info(
-                                    `Dry run: would have retweeted tweet ${tweet.id}`
-                                );
-                                executedActions.push("retweet (dry run)");
-                            } else {
-                                await this.client.twitterClient.retweet(
-                                    tweet.id
-                                );
-                                executedActions.push("retweet");
-                                elizaLogger.log(`Retweeted tweet ${tweet.id}`);
-                                this.numRetweets++;
-                                await this.updateActionCounter("retweet");
-                            }
-                        } catch (error) {
-                            elizaLogger.error(
-                                `Error retweeting tweet ${tweet.id}:`,
-                                error
-                            );
-                        }
-                    }
+                    // if (
+                    //     actionResponse.retweet &&
+                    //     this.canPerformAction("retweet")
+                    // ) {
+                    //     try {
+                    //         if (this.isDryRun) {
+                    //             elizaLogger.info(
+                    //                 `Dry run: would have retweeted tweet ${tweet.id}`
+                    //             );
+                    //             executedActions.push("retweet (dry run)");
+                    //         } else {
+                    //             await this.client.twitterClient.retweet(
+                    //                 tweet.id
+                    //             );
+                    //             executedActions.push("retweet");
+                    //             elizaLogger.log(`Retweeted tweet ${tweet.id}`);
+                    //             this.numRetweets++;
+                    //             await this.updateActionCounter("retweet");
+                    //         }
+                    //     } catch (error) {
+                    //         elizaLogger.error(
+                    //             `Error retweeting tweet ${tweet.id}:`,
+                    //             error
+                    //         );
+                    //     }
+                    // }
 
                     if (actionResponse.quote) {
                         try {
@@ -1331,8 +1330,8 @@ export class TwitterPostClient {
     private readonly ACTION_LIMITS = {
         like: { max: 8, windowHours: 3 },
         retweet: { max: 5, windowHours: 3 },
-        reply: { max: 10, windowHours: 3 },
-        quote: { max: 10, windowHours: 3 },
+        reply: { max: 8, windowHours: 3 },
+        quote: { max: 5, windowHours: 3 },
     };
 
     private canPerformAction(actionType: string): boolean {
