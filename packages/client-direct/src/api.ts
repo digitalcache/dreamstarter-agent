@@ -21,11 +21,12 @@ const checkOrigin = (
 
     const isLocalhost =
         origin === "http://localhost:3000" || host === "localhost:8000";
-    const isDreamstarter =
+    const isFromWeb =
         origin?.endsWith("dreamstarter.xyz") ||
+        origin?.endsWith("web3it.ai") ||
         origin?.endsWith("dreamstarter.vercel.app");
 
-    if (isLocalhost || isDreamstarter) {
+    if (isLocalhost || isFromWeb) {
         next();
     } else {
         res.status(403).json({
@@ -44,6 +45,7 @@ export function createApiRouter(
         origin: [
             "http://localhost:3000",
             /\.dreamstarter\.xyz$/,
+            /\.web3it\.ai$/,
             /\.dreamstarter\.vercel\.app$/,
         ],
         optionsSuccessStatus: 200,
