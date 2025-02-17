@@ -16,8 +16,14 @@ import { IImageDescriptionService, ServiceType } from "@elizaos/core";
 import { buildConversationThread } from "./utils.ts";
 import { twitterMessageHandlerTemplate } from "./interactions.ts";
 import { DEFAULT_MAX_TWEET_LENGTH } from "./environment.ts";
+import { ContentPlan, ContentPlanManager, ScheduledPost } from "./contentPlan";
 
-const twitterPostTemplate = `
+export const twitterPlanTemplate = `TASK: Generate a %days%-day content plan with approximately %num_per_day% posts per day as an array of posts in JSON format.
+Generate the posts in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
+Write all the posts with traits of {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
+Your post response should have 1, 2, or 3 sentences, but definitely include the URL only if provided.
+Your response should not contain any questions. Brief, concise statements only. The total character count for each post MUST be less than 275 characters (to ensure it fits within Twitter's limits). Use \\n\\n (double spaces) between statements if there are multiple statements in your response.
+
 # Areas of Expertise
 {{knowledge}}
 
@@ -28,14 +34,56 @@ const twitterPostTemplate = `
 
 {{providers}}
 
+
+# POST EXAMPLES
 {{characterPostExamples}}
 
+# INSTRUCTIONS
 {{postDirections}}
 
-# Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
+
+Response should be a JSON object array inside a JSON markdown block. Correct response format:
+\`\`\`json
+[
+  {
+    "day": number,
+    "content": {
+        "time": string,
+        "text": string
+    }
+  },
+  {
+    "day": number,
+    "content": {
+        "time": string,
+        "text": string
+    }
+  },
+  ...
+]
+\`\`\``;
+
+export const twitterPostTemplate = `TASK: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
 Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
 Your response should be 1, 2, or 3 sentences, but definitely include the URL if provided.
 Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than 275 characters (to ensure it fits within Twitter's limits). Use \\n\\n (double spaces) between statements if there are multiple statements in your response. If there is a URL in the response, prioritize that and reframe sentence but keep under 275 characters.
+
+# Areas of Expertise
+{{knowledge}}
+
+# About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
+{{topics}}
+
+{{providers}}
+
+
+# POST EXAMPLES
+{{characterPostExamples}}
+
+# INSTRUCTIONS
+{{postDirections}}
 `;
 
 export const twitterActionTemplate =
@@ -150,6 +198,7 @@ Tweet:
 
 export class TwitterPostClient {
     client: ClientBase;
+
     runtime: IAgentRuntime;
     twitterUsername: string;
     numTweets: number;
@@ -166,6 +215,8 @@ export class TwitterPostClient {
     actionInterval: number;
     private tweetGenerationTimeoutId: NodeJS.Timeout | null;
     private actionProcessingTimeoutId: NodeJS.Timeout | null;
+    contentPlanManager: ContentPlanManager;
+    currentPlanId: string | null = null;
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.client = client;
@@ -183,7 +234,7 @@ export class TwitterPostClient {
         this.enableScheduledPosts = false;
         this.postInterval = 480;
         this.actionInterval = 7200000;
-
+        this.contentPlanManager = new ContentPlanManager(client, runtime);
         // Log configuration on initialization
         elizaLogger.log("Twitter Client Configuration:");
         elizaLogger.log(`- Username: ${this.twitterUsername}`);
@@ -212,46 +263,164 @@ export class TwitterPostClient {
     }
 
     async start() {
-        // if (!this.client.profile) {
-        //     await this.client.init();
-        // }
-        const generateNewTweetLoop = async () => {
-            if (!this.enableScheduledPosts) {
-                return;
+        if (!this.enableScheduledPosts) {
+            return;
+        }
+        if (!this.currentPlanId) {
+            const activePlan: any = await this.getActivePlan();
+            if (activePlan) {
+                this.currentPlanId = activePlan.id;
+            } else {
+                console.log(new Date());
+                const plan = await this.generateNewPlan(new Date());
+                console.log("PLAN", plan);
+                this.currentPlanId = plan.id;
             }
-            const lastPost = await this.runtime.cacheManager.get<{
-                timestamp: number;
-            }>("twitter/" + this.twitterUsername + "/lastPost");
-            const lastPostTimestamp = lastPost?.timestamp ?? 0;
-            const minMinutes = this.postInterval;
-            const maxMinutes = this.postInterval + 20;
-            const randomMinutes =
-                Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) +
-                minMinutes;
-            const delay = randomMinutes * 60 * 1000;
+        }
 
-            if (Date.now() > lastPostTimestamp + delay) {
-                await this.generateNewTweet();
+        if (!this.isDryRun) {
+            this.startPostExecutionLoop();
+        }
+    }
+
+    private async getActivePlan() {
+        // Get all plans from cache and find the active one
+        const activePlanId =
+            (await this.runtime.cacheManager.get(
+                `twitter/${this.client.profile.username}/active_plan`
+            )) || null;
+
+        if (!activePlanId) return null;
+
+        const activePlan =
+            (await this.runtime.cacheManager.get(
+                `twitter/${this.client.profile.username}/content_plan/${activePlanId}`
+            )) || null;
+
+        return activePlan;
+    }
+
+    private async startPostExecutionLoop() {
+        const checkAndExecute = async () => {
+            if (!this.enableScheduledPosts) return;
+            console.log("Checking for scheduled posts");
+            const nextPost = await this.getNextScheduledPost();
+            console.log("Next post:", nextPost);
+            if (nextPost && this.shouldExecutePost(nextPost)) {
+                await this.executeScheduledPost(nextPost);
             }
 
-            this.tweetGenerationTimeoutId = setTimeout(() => {
-                generateNewTweetLoop(); // Set up next iteration
-            }, delay);
-
-            elizaLogger.log(`Next tweet scheduled in ${randomMinutes} minutes`);
+            // Schedule next check in 5 minutes
+            this.tweetGenerationTimeoutId = setTimeout(
+                checkAndExecute,
+                10 * 60 * 1000
+            );
         };
 
-        if (this.client.twitterConfig.POST_IMMEDIATELY) {
-            await this.generateNewTweet();
-        }
+        checkAndExecute();
+    }
 
-        // Only start tweet generation loop if not in dry run mode
-        if (!this.isDryRun) {
-            generateNewTweetLoop();
-            elizaLogger.log("Tweet generation loop started");
-        } else {
-            elizaLogger.log("Tweet generation loop disabled (dry run mode)");
+    private async getNextScheduledPost() {
+        if (!this.currentPlanId) return null;
+
+        const plan = await this.contentPlanManager.getPlan(this.currentPlanId);
+        if (!plan || plan.status !== "approved") return null;
+
+        const now = new Date();
+        const sortedPosts = plan.posts
+            .filter(
+                (post) =>
+                    post.status === "approved" &&
+                    new Date(post.scheduledTime) > now
+            )
+            .sort(
+                (a, b) =>
+                    new Date(a.scheduledTime).getTime() -
+                    new Date(b.scheduledTime).getTime()
+            );
+        return sortedPosts[0];
+    }
+
+    private shouldExecutePost(post: ScheduledPost): boolean {
+        const now = new Date();
+        const scheduledTime = new Date(post.scheduledTime);
+        // Execute if within 2 minutes of scheduled time
+        return (
+            Math.abs(now.getTime() - scheduledTime.getTime()) <= 2 * 60 * 1000
+        );
+    }
+
+    private async executeScheduledPost(post: ScheduledPost) {
+        try {
+            elizaLogger.log(`Executing scheduled post: ${post.id}`);
+
+            const roomId = stringToUuid(
+                "twitter_generate_room-" + this.client.profile.username
+            );
+
+            if (this.isDryRun) {
+                elizaLogger.info(`Dry run: would have posted: ${post.content}`);
+                return;
+            }
+
+            await this.postTweet(
+                this.runtime,
+                this.client,
+                post.content,
+                roomId,
+                post.content,
+                this.twitterUsername
+            );
+
+            // Update post status
+            await this.contentPlanManager.updatePost(
+                this.currentPlanId,
+                post.id,
+                {
+                    status: "posted",
+                }
+            );
+            await this.generateNextPost();
+        } catch (error) {
+            elizaLogger.error(
+                `Error executing scheduled post ${post.id}:`,
+                error
+            );
         }
+    }
+
+    private async generateNextPost() {
+        if (!this.currentPlanId) return;
+
+        const plan = await this.contentPlanManager.getPlan(this.currentPlanId);
+        if (!plan) return;
+
+        // Check if we need to generate more posts
+        const plannedTotal = plan.metadata?.plannedTotalPosts || 0;
+        if (plan.posts.length < plannedTotal) {
+            const nextPost = await this.contentPlanManager.generateNextPost(
+                plan,
+                this.postInterval
+            );
+            if (nextPost) {
+                // Add the new post to the plan
+                plan.posts.push(nextPost);
+                plan.metadata.totalPosts = plan.posts.length;
+                await this.contentPlanManager.storePlan(plan);
+                elizaLogger.log(
+                    `Generated next post for time: ${nextPost.scheduledTime}`
+                );
+            }
+        }
+    }
+
+    // New methods for content plan management
+    async generateNewPlan(startDate: Date = new Date()): Promise<ContentPlan> {
+        return await this.contentPlanManager.generateContentPlan(
+            startDate,
+            2,
+            this.postInterval
+        );
     }
 
     async stopNewTweets() {
@@ -1057,20 +1226,20 @@ export class TwitterPostClient {
                     //     }
                     // }
 
-                    if (actionResponse.reply) {
-                        try {
-                            await this.handleTextOnlyReply(
-                                tweet,
-                                tweetState,
-                                executedActions
-                            );
-                        } catch (error) {
-                            elizaLogger.error(
-                                `Error replying to tweet ${tweet.id}:`,
-                                error
-                            );
-                        }
-                    }
+                    // if (actionResponse.reply) {
+                    //     try {
+                    //         await this.handleTextOnlyReply(
+                    //             tweet,
+                    //             tweetState,
+                    //             executedActions
+                    //         );
+                    //     } catch (error) {
+                    //         elizaLogger.error(
+                    //             `Error replying to tweet ${tweet.id}:`,
+                    //             error
+                    //         );
+                    //     }
+                    // }
 
                     // Add these checks before creating memory
                     await this.runtime.ensureRoomExists(roomId);

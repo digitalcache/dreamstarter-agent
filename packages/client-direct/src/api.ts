@@ -121,6 +121,57 @@ export function createApiRouter(
         });
     });
 
+    router.get("/agents/:agentId/tweets", async (req, res) => {
+        const agentId = req.params.agentId;
+        const agent = agents.get(agentId);
+
+        if (!agent) {
+            res.status(404).json({ error: "Agent not found" });
+            return;
+        }
+        const twitterClient = agent.clients["twitter"];
+        if (twitterClient && twitterClient.post.currentPlanId) {
+            const postManager = twitterClient.post;
+            const contentManager = postManager.contentPlanManager;
+            const plan = await contentManager.getPlan(
+                postManager.currentPlanId
+            );
+            res.json({
+                id: agent.agentId,
+                plan: plan,
+            });
+            return;
+        }
+        res.status(404).json({ error: "Could not find twitter account" });
+    });
+
+    router.post("/agents/:agentId/update-tweet", async (req, res) => {
+        const agentId = req.params.agentId;
+        const agent = agents.get(agentId);
+        const content = req.body.content;
+        const postId = req.body.postId;
+        const planId = req.body.planId;
+        if (!agent) {
+            res.status(404).json({ error: "Agent not found" });
+            return;
+        }
+        const twitterClient = agent.clients["twitter"];
+        if (twitterClient && twitterClient.post.currentPlanId) {
+            const postManager = twitterClient.post;
+            const contentManager = postManager.contentPlanManager;
+            await contentManager.updatePost(planId, postId, {
+                content: content,
+            });
+            res.json({
+                status: "success",
+            });
+            return;
+        }
+        res.status(404).json({
+            status: "failed",
+        });
+    });
+
     router.post("/agents/:agentId/set", async (req, res) => {
         const agentId = req.params.agentId;
         const schedulingPosts = req.body.schedulingPosts;
