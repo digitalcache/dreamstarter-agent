@@ -195,7 +195,7 @@ export class ContentPlanManager {
         const content = await generateText({
             runtime: this.runtime,
             context,
-            modelClass: ModelClass.MEDIUM,
+            modelClass: ModelClass.LARGE,
         });
 
         return {
