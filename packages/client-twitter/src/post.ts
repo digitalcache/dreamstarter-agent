@@ -26,6 +26,7 @@ Your response should not contain any questions. Brief, concise statements only. 
 
 # Areas of Expertise
 {{knowledge}}
+{{knowledgeData}}
 
 # About {{agentName}} (@{{twitterUserName}}):
 {{bio}}
@@ -313,7 +314,7 @@ export class TwitterPostClient {
             // Schedule next check in 5 minutes
             this.tweetGenerationTimeoutId = setTimeout(
                 checkAndExecute,
-                10 * 60 * 1000
+                5 * 60 * 1000
             );
         };
 
@@ -418,7 +419,7 @@ export class TwitterPostClient {
     async generateNewPlan(startDate: Date = new Date()): Promise<ContentPlan> {
         return await this.contentPlanManager.generateContentPlan(
             startDate,
-            2,
+            30,
             this.postInterval
         );
     }
