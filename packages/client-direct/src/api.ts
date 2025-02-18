@@ -277,6 +277,19 @@ export function createApiRouter(
             if (twitterManager.post.postInterval !== postInterval) {
                 twitterManager.post.postInterval = postInterval;
                 if (schedulingPosts) {
+                    if (twitterManager.post.currentPlanId) {
+                        const activePlan =
+                            await twitterManager.post.contentPlanManager.getPlan(
+                                twitterManager.post.currentPlanId
+                            );
+                        if (activePlan) {
+                            await twitterManager.post.recalculatePostSchedule(
+                                activePlan,
+                                postInterval
+                            );
+                        }
+                    }
+
                     await twitterManager.post.stopNewTweets();
                     await twitterManager.post.start();
                 }

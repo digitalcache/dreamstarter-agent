@@ -342,6 +342,28 @@ export class TwitterPostClient {
         return sortedPosts[0];
     }
 
+    async recalculatePostSchedule(
+        plan: ContentPlan,
+        newInterval: number
+    ): Promise<void> {
+        if (!plan || !plan.posts || plan.posts.length === 0) return;
+
+        const baseTime = new Date(plan.posts[0].scheduledTime);
+
+        for (let i = 1; i < plan.posts.length; i++) {
+            const newScheduledTime = new Date(baseTime);
+            newScheduledTime.setMinutes(
+                newScheduledTime.getMinutes() + i * newInterval
+            );
+
+            if (newScheduledTime > new Date()) {
+                plan.posts[i].scheduledTime = newScheduledTime;
+            }
+        }
+
+        await this.contentPlanManager.storePlan(plan);
+    }
+
     private shouldExecutePost(post: ScheduledPost): boolean {
         const now = new Date();
         const scheduledTime = new Date(post.scheduledTime);
