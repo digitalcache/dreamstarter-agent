@@ -159,8 +159,15 @@ export class ContentPlanManager {
         const lastPost = plan.posts[plan.posts.length - 1];
         if (!lastPost) return null;
 
-        const nextPostTime = new Date(lastPost.scheduledTime);
+        const now = new Date();
+        let nextPostTime = new Date(lastPost.scheduledTime);
         nextPostTime.setMinutes(nextPostTime.getMinutes() + postInterval);
+
+        // If the calculated next post time is in the past, use current time as base
+        if (nextPostTime < now) {
+            nextPostTime = new Date(now);
+            nextPostTime.setMinutes(now.getMinutes() + postInterval);
+        }
 
         if (nextPostTime > plan.endDate) return null;
 

@@ -328,7 +328,7 @@ export class TwitterPostClient {
         if (!plan || plan.status !== "approved") return null;
 
         const now = new Date();
-        const sortedPosts = plan.posts
+        let sortedPosts = plan.posts
             .filter(
                 (post) =>
                     post.status === "approved" &&
@@ -339,6 +339,43 @@ export class TwitterPostClient {
                     new Date(a.scheduledTime).getTime() -
                     new Date(b.scheduledTime).getTime()
             );
+
+        if (!sortedPosts || sortedPosts.length < 10) {
+            const requiredPosts = 10 - (sortedPosts?.length || 0);
+
+            const newPosts = [];
+            for (let i = 0; i < requiredPosts; i++) {
+                const newPost = await this.generateNextPost();
+                if (newPost) {
+                    newPosts.push(newPost);
+                }
+                setTimeout(() => {}, 5000);
+            }
+
+            // Add new posts to the plan
+            if (newPosts.length > 0) {
+                // Re-sort all posts including new ones
+                sortedPosts = [
+                    ...sortedPosts,
+                    ...newPosts.filter(
+                        (post) =>
+                            post.status === "approved" &&
+                            new Date(post.scheduledTime) > now
+                    ),
+                ]
+                    .filter(
+                        (post) =>
+                            post.status === "approved" &&
+                            new Date(post.scheduledTime) > now
+                    )
+                    .sort(
+                        (a, b) =>
+                            new Date(a.scheduledTime).getTime() -
+                            new Date(b.scheduledTime).getTime()
+                    );
+            }
+        }
+
         return sortedPosts[0];
     }
 
@@ -433,6 +470,7 @@ export class TwitterPostClient {
                 elizaLogger.log(
                     `Generated next post for time: ${nextPost.scheduledTime}`
                 );
+                return nextPost;
             }
         }
     }
@@ -718,7 +756,7 @@ export class TwitterPostClient {
             const newTweetContent = await generateText({
                 runtime: this.runtime,
                 context,
-                modelClass: ModelClass.MEDIUM,
+                modelClass: ModelClass.LARGE,
             });
 
             // First attempt to clean content

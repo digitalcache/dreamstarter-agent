@@ -435,7 +435,7 @@ export class TwitterInteractionClient {
         const shouldRespond = await generateShouldRespond({
             runtime: this.runtime,
             context: shouldRespondContext,
-            modelClass: ModelClass.MEDIUM,
+            modelClass: ModelClass.LARGE,
         });
 
         // Promise<"RESPOND" | "IGNORE" | "STOP" | null> {
