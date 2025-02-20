@@ -405,6 +405,11 @@ export class TwitterPostClient {
         const now = new Date();
         const scheduledTime = new Date(post.scheduledTime);
         // Execute if within 2 minutes of scheduled time
+        console.log("twitter USER", this.client.profile.username);
+        console.log(
+            "SHOULD execute",
+            Math.abs(now.getTime() - scheduledTime.getTime()) <= 2 * 60 * 1000
+        );
         return (
             Math.abs(now.getTime() - scheduledTime.getTime()) <= 2 * 60 * 1000
         );
