@@ -113,7 +113,7 @@ export const continueAction: Action = {
 
             const response = await generateTrueOrFalse({
                 context: shouldRespondContext,
-                modelClass: ModelClass.LARGE,
+                modelClass: ModelClass.SMALL,
                 runtime,
             });
 

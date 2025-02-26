@@ -760,7 +760,7 @@ export class TwitterPostClient {
             const newTweetContent = await generateText({
                 runtime: this.runtime,
                 context,
-                modelClass: ModelClass.LARGE,
+                modelClass: ModelClass.MEDIUM,
             });
 
             // First attempt to clean content
@@ -1061,7 +1061,7 @@ export class TwitterPostClient {
                     const actionResponse = await generateTweetActions({
                         runtime: this.runtime,
                         context: actionContext,
-                        modelClass: ModelClass.LARGE,
+                        modelClass: ModelClass.MEDIUM,
                     });
 
                     if (
