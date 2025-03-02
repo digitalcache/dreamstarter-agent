@@ -385,20 +385,36 @@ export class TwitterPostClient {
     ): Promise<void> {
         if (!plan || !plan.posts || plan.posts.length === 0) return;
 
-        const baseTime = new Date(plan.posts[0].scheduledTime);
+        const updatedPlan = structuredClone(plan);
+        updatedPlan.posts.sort((a, b) => {
+            const timeA = new Date(a.scheduledTime).getTime();
+            const timeB = new Date(b.scheduledTime).getTime();
+            return timeA - timeB;
+        });
+        const now = new Date();
+        let baseTime: Date;
+        const firstPostTime = new Date(updatedPlan.posts[0].scheduledTime);
+        if (firstPostTime < now) {
+            baseTime = now;
+        } else {
+            baseTime = firstPostTime;
+        }
+        const isStartingFromNow = firstPostTime < now;
 
-        for (let i = 1; i < plan.posts.length; i++) {
+        for (let i = 0; i < updatedPlan.posts.length; i++) {
+            if (i === 0 && !isStartingFromNow) return;
             const newScheduledTime = new Date(baseTime);
             newScheduledTime.setMinutes(
-                newScheduledTime.getMinutes() + i * newInterval
+                newScheduledTime.getMinutes() +
+                    (isStartingFromNow ? i : i - 1) * newInterval
             );
 
-            if (newScheduledTime > new Date()) {
-                plan.posts[i].scheduledTime = newScheduledTime;
+            if (newScheduledTime > now) {
+                updatedPlan.posts[i].scheduledTime = newScheduledTime;
             }
         }
 
-        await this.contentPlanManager.storePlan(plan);
+        await this.contentPlanManager.storePlan(updatedPlan);
     }
 
     private shouldExecutePost(post: ScheduledPost): boolean {

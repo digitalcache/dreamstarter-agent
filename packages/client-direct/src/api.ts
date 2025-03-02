@@ -136,6 +136,11 @@ export function createApiRouter(
             const plan = await contentManager.getPlan(
                 postManager.currentPlanId
             );
+            plan.posts = plan.posts.sort(
+                (a, b) =>
+                    new Date(a.scheduledTime).getTime() -
+                    new Date(b.scheduledTime).getTime()
+            );
             res.json({
                 id: agent.agentId,
                 plan: plan,
