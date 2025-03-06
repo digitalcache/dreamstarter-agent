@@ -1,6 +1,9 @@
-import express from "express";
+import express, { Request as ExpressRequest } from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
+import multer from "multer";
+import * as fs from "fs";
+import * as path from "path";
 import {
     AgentRuntime,
     elizaLogger,
@@ -10,6 +13,36 @@ import {
 
 import { REST, Routes } from "discord.js";
 import { DirectClient } from ".";
+interface CustomRequest extends ExpressRequest {
+    image?: Express.Multer.File;
+}
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(process.cwd(), "data", "uploads");
+        // Create the directory if it doesn't exist
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, `upload_${Date.now()}`);
+    },
+});
+
+const upload = multer({ storage });
+
+export function saveBase64Image(base64Data: string, filename: string): string {
+    const imageDir = path.join(process.cwd(), "generatedImages");
+    if (!fs.existsSync(imageDir)) {
+        fs.mkdirSync(imageDir, { recursive: true });
+    }
+    const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, "");
+    const imageBuffer = Buffer.from(base64Image, "base64");
+    const filepath = path.join(imageDir, `${filename}.png`);
+    fs.writeFileSync(filepath, imageBuffer);
+    return filepath;
+}
 
 const checkOrigin = (
     req: express.Request,
@@ -174,6 +207,101 @@ export function createApiRouter(
         }
         res.status(404).json({
             status: "failed",
+        });
+    });
+
+    router.post(
+        "/agents/:agentId/update-tweet-image",
+        upload.single("image"),
+        async (req: CustomRequest, res: express.Response) => {
+            const agentId = req.params.agentId;
+            const agent = agents.get(agentId);
+            const postId = req.body.postId;
+            const planId = req.body.planId;
+            const imageFromAI = req.body.imageFromAI;
+            let filepath = imageFromAI;
+
+            // const filepath = path.join(imageDir, `${filename}.png`);
+            const baseDir = path.join(process.cwd(), "generatedImages");
+            const generatedFileName = imageFromAI?.split("/").pop();
+            let newPath = path.join(baseDir, `${generatedFileName}`);
+            if (!agent) {
+                res.status(404).json({ error: "Agent not found" });
+                return;
+            }
+            if (!imageFromAI) {
+                const newFilename = `${planId}_${postId}_${Date.now()}`;
+                newPath = path.join(path.dirname(req.file.path), newFilename);
+                newPath = newPath + "." + req.file.mimetype.split("/")[1];
+                fs.renameSync(req.file.path, newPath);
+                const normalizedPath = newPath.replace(/\\/g, "/");
+                const filename = normalizedPath.split("/").pop();
+                filepath = `https://api.dreamstarter.xyz/media/uploads/${filename}`;
+            }
+            const twitterClient = agent.clients["twitter"];
+            if (twitterClient && twitterClient.post.currentPlanId) {
+                const postManager = twitterClient.post;
+                const contentManager = postManager.contentPlanManager;
+                await contentManager.updatePost(planId, postId, {
+                    attachments: [filepath],
+                    localPath: [
+                        {
+                            type: imageFromAI ? "image/png" : req.file.mimetype,
+                            url: newPath,
+                        },
+                    ],
+                });
+                res.json({
+                    status: "success",
+                });
+                return;
+            }
+            res.status(404).json({
+                status: "failed",
+            });
+        }
+    );
+
+    router.delete("/agents/:agentId/remove-tweet-image", async (req, res) => {
+        const agentId = req.params.agentId;
+        const agent = agents.get(agentId);
+        const postId = req.body.postId;
+        const planId = req.body.planId;
+
+        if (!agent) {
+            res.status(404).json({ error: "Agent not found" });
+            return;
+        }
+
+        const twitterClient = agent.clients["twitter"];
+
+        if (twitterClient && twitterClient.post.currentPlanId) {
+            const postManager = twitterClient.post;
+            const contentManager = postManager.contentPlanManager;
+
+            try {
+                // Update the post with empty attachments array to remove images
+                await contentManager.updatePost(planId, postId, {
+                    attachments: [],
+                });
+
+                res.json({
+                    status: "success",
+                    message: "Image removed successfully",
+                });
+            } catch (error) {
+                console.error("Error removing image:", error);
+                res.status(500).json({
+                    status: "failed",
+                    error: "Failed to remove image",
+                });
+            }
+            return;
+        }
+
+        res.status(404).json({
+            status: "failed",
+            error: "Twitter client or plan not found",
         });
     });
 

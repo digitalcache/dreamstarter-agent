@@ -8,6 +8,7 @@ import {
     stringToUuid,
     UUID,
 } from "@elizaos/core";
+import * as fs from "fs";
 import { elizaLogger } from "@elizaos/core";
 import { ClientBase } from "./base.ts";
 import { postActionResponseFooter } from "@elizaos/core";
@@ -442,14 +443,16 @@ export class TwitterPostClient {
                 elizaLogger.info(`Dry run: would have posted: ${post.content}`);
                 return;
             }
-
             await this.postTweet(
                 this.runtime,
                 this.client,
                 post.content,
                 roomId,
                 post.content,
-                this.twitterUsername
+                this.twitterUsername,
+                post.attachments?.length && post.localPath?.length
+                    ? post.localPath[0]
+                    : null
             );
 
             // Update post status
@@ -642,21 +645,36 @@ export class TwitterPostClient {
         client: ClientBase,
         runtime: IAgentRuntime,
         content: string,
-        tweetId?: string
+        tweetId?: string,
+        attachments?: {
+            type: string;
+            url: string;
+        } | null
     ) {
         try {
+            const buffer = fs.readFileSync(attachments.url);
             const noteTweetResult = await client.requestQueue.add(
                 async () =>
-                    await client.twitterClient.sendNoteTweet(content, tweetId)
+                    await client.twitterClient.sendNoteTweet(
+                        content,
+                        tweetId,
+                        attachments?.url
+                            ? [
+                                  {
+                                      data: buffer,
+                                      mediaType: attachments.type,
+                                  },
+                              ]
+                            : undefined
+                    )
             );
-
             if (noteTweetResult.errors && noteTweetResult.errors.length > 0) {
-                // Note Tweet failed due to authorization. Falling back to standard Tweet.
-                // const truncateContent = truncateToCompleteSentence(
-                //     content,
-                //     this.client.twitterConfig.MAX_TWEET_LENGTH
-                // );
-                return await this.sendStandardTweet(client, content, tweetId);
+                return await this.sendStandardTweet(
+                    client,
+                    content,
+                    tweetId,
+                    attachments
+                );
             } else {
                 return noteTweetResult.data.notetweet_create.tweet_results
                     .result;
@@ -669,12 +687,28 @@ export class TwitterPostClient {
     async sendStandardTweet(
         client: ClientBase,
         content: string,
-        tweetId?: string
+        tweetId?: string,
+        attachments?: {
+            type: string;
+            url: string;
+        } | null
     ) {
         try {
+            const buffer = fs.readFileSync(attachments.url);
             const standardTweetResult = await client.requestQueue.add(
                 async () =>
-                    await client.twitterClient.sendTweet(content, tweetId)
+                    await client.twitterClient.sendTweet(
+                        content,
+                        tweetId,
+                        attachments?.url
+                            ? [
+                                  {
+                                      data: buffer,
+                                      mediaType: attachments.type,
+                                  },
+                              ]
+                            : undefined
+                    )
             );
             const body = await standardTweetResult.json();
             if (!body?.data?.create_tweet?.tweet_results?.result) {
@@ -694,21 +728,31 @@ export class TwitterPostClient {
         cleanedContent: string,
         roomId: UUID,
         newTweetContent: string,
-        twitterUsername: string
+        twitterUsername: string,
+        attachments?: {
+            type: string;
+            url: string;
+        } | null
     ) {
         try {
             elizaLogger.log(`Posting new tweet:\n`);
-
             let result;
 
             if (cleanedContent.length > DEFAULT_MAX_TWEET_LENGTH) {
                 result = await this.handleNoteTweet(
                     client,
                     runtime,
-                    cleanedContent
+                    cleanedContent,
+                    "",
+                    attachments
                 );
             } else {
-                result = await this.sendStandardTweet(client, cleanedContent);
+                result = await this.sendStandardTweet(
+                    client,
+                    cleanedContent,
+                    "",
+                    attachments
+                );
             }
 
             const tweet = this.createTweetObject(

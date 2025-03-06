@@ -137,7 +137,7 @@ export const models: Models = {
             [ModelClass.LARGE]: "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
             [ModelClass.EMBEDDING]:
                 "togethercomputer/m2-bert-80M-32k-retrieval",
-            [ModelClass.IMAGE]: "black-forest-labs/FLUX.1-schnell",
+            [ModelClass.IMAGE]: "black-forest-labs/FLUX.1.1-pro",
         },
     },
     [ModelProviderName.TOGETHER]: {
@@ -158,7 +158,7 @@ export const models: Models = {
             [ModelClass.LARGE]: "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
             [ModelClass.EMBEDDING]:
                 "togethercomputer/m2-bert-80M-32k-retrieval",
-            [ModelClass.IMAGE]: "black-forest-labs/FLUX.1-schnell",
+            [ModelClass.IMAGE]: "black-forest-labs/FLUX.1.1-pro",
         },
     },
     [ModelProviderName.LLAMALOCAL]: {

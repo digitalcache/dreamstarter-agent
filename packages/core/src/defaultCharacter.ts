@@ -5,6 +5,7 @@ export const defaultCharacter: Character = {
     plugins: [],
     clients: [Clients.TWITTER],
     modelProvider: ModelProviderName.ANTHROPIC,
+    imageModelProvider: ModelProviderName.TOGETHER,
     settings: {
         modelConfig: {
             maxInputTokens: 10000,
