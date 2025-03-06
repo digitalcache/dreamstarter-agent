@@ -652,7 +652,6 @@ export class TwitterPostClient {
         } | null
     ) {
         try {
-            const buffer = fs.readFileSync(attachments.url);
             const noteTweetResult = await client.requestQueue.add(
                 async () =>
                     await client.twitterClient.sendNoteTweet(
@@ -661,7 +660,7 @@ export class TwitterPostClient {
                         attachments?.url
                             ? [
                                   {
-                                      data: buffer,
+                                      data: fs.readFileSync(attachments.url),
                                       mediaType: attachments.type,
                                   },
                               ]
@@ -694,7 +693,6 @@ export class TwitterPostClient {
         } | null
     ) {
         try {
-            const buffer = fs.readFileSync(attachments.url);
             const standardTweetResult = await client.requestQueue.add(
                 async () =>
                     await client.twitterClient.sendTweet(
@@ -703,7 +701,7 @@ export class TwitterPostClient {
                         attachments?.url
                             ? [
                                   {
-                                      data: buffer,
+                                      data: fs.readFileSync(attachments.url),
                                       mediaType: attachments.type,
                                   },
                               ]
