@@ -236,7 +236,7 @@ export function createApiRouter(
                 fs.renameSync(req.file.path, newPath);
                 const normalizedPath = newPath.replace(/\\/g, "/");
                 const filename = normalizedPath.split("/").pop();
-                filepath = `http://localhost:8000/media/uploads/${filename}`;
+                filepath = `https://api.dreamstarter.xyz/media/uploads/${filename}`;
             }
             const twitterClient = agent.clients["twitter"];
             if (twitterClient && twitterClient.post.currentPlanId) {
