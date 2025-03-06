@@ -16,6 +16,11 @@ export interface ScheduledPost {
     topics?: string[];
     notes?: string;
     reviewFeedback?: string;
+    attachments?: string[];
+    localPath?: Array<{
+        type: string;
+        url: string;
+    }>
 }
 
 export interface ContentPlan {

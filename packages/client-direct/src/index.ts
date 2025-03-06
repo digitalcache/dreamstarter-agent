@@ -5,8 +5,8 @@ import forge from "node-forge";
 import multer from "multer";
 import {
     elizaLogger,
-    generateCaption,
     generateImage,
+    generateText,
     defaultCharacter,
     Media,
     getEmbeddingZeroVector,
@@ -45,6 +45,210 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+
+export function saveBase64Image(base64Data: string, filename: string): string {
+    const imageDir = path.join(process.cwd(), "generatedImages");
+    if (!fs.existsSync(imageDir)) {
+        fs.mkdirSync(imageDir, { recursive: true });
+    }
+    const base64Image = base64Data.replace(/^data:image\/\w+;base64,/, "");
+    const imageBuffer = Buffer.from(base64Image, "base64");
+    const filepath = path.join(imageDir, `${filename}.png`);
+    fs.writeFileSync(filepath, imageBuffer);
+    return filepath;
+}
+
+
+const generateImagePromptInput = (content: string, style: string, styleDescription: string, detailedDescription: string) => {
+  return `You are tasked with generating an image prompt for a Twitter post based on content and a specified style.
+Your goal is to create a detailed and vivid image prompt that captures the essence of the content while being optimized for Twitter engagement.
+
+You will be given the following inputs:
+<content>
+${content}
+</content>
+
+<style>
+${style}
+</style>
+
+<style_description>
+${detailedDescription}
+</style_description>
+
+A good Twitter image prompt in ${styleDescription} style consists of the following elements:
+1. Bold, attention-grabbing main subject
+2. Clear, uncomplicated composition
+3. Style-appropriate visual elements
+4. Limited text elements (if any)
+5. Visual elements that encourage sharing
+
+To generate the Twitter-optimized image prompt, follow these steps:
+
+1. Analyze the content text carefully, identifying key themes, emotions, and visual elements that would resonate on social media.
+
+2. Determine the most appropriate main subject that works well in the ${styleDescription} style by:
+   - Identifying concrete objects or persons that will be instantly recognizable
+   - Focusing on a single clear message or concept
+   - Ensuring the subject works well in both square and rectangular crops
+   - Selecting elements that will stand out in a crowded feed
+
+3. Determine a background that complements the ${styleDescription} aesthetic without overwhelming the main subject.
+
+4. Choose lighting and color palette that is characteristic of ${styleDescription} style.
+
+5. Identify the emotional response you want to evoke in viewers.
+
+6. Plan a composition that works well in Twitter's image display formats.
+
+Construct your image prompt using the following structure:
+1. Main subject: Describe the primary focus that will immediately catch attention
+2. Composition: Specify a layout that works well in social media formats
+3. Colors: Focus on color combinations typical of ${styleDescription} style
+4. Lighting: Describe lighting that creates visual interest appropriate to the style
+5. Mood: Specify the emotional impact you want to create
+6. Style details: Include specific ${styleDescription} style elements that enhance authenticity
+
+Ensure that your prompt creates imagery that is instantly understandable, visually striking, and optimized for social media sharing. LIMIT the image prompt to 50 words or less.
+
+Write a prompt. Only include the prompt and nothing else. If possible try to generate animated PNG.`;
+};
+
+// Detailed style descriptions
+const styleDescriptions = {
+  photorealistic: `Photorealism aims to create images indistinguishable from photographs with extreme detail and precision in all elements, accurate lighting and shadows, proper perspective, natural textures, depth of field effects, subtle imperfections for authenticity, color accuracy, and natural environmental elements. This style prioritizes technical accuracy over artistic interpretation.`,
+
+  watercolor: `Watercolor style is characterized by its fluid, transparent quality with visible paper texture, color bleeds and gradient washes, soft edges, granulation effects, white space as an active element, layered transparency, wet-in-wet effects, slightly impressionistic details, subtle color variations, and limited use of white. The style embraces controlled unpredictability and organic flow.`,
+
+  pixel_art: `Pixel art embraces deliberate low-resolution aesthetics with individual pixels as building blocks, limited color palettes (8-64 colors), no anti-aliasing, "jaggies" on diagonal lines, dithering patterns, consistent pixel sizing, simple iconic designs, tile-based backgrounds, and clean outlines with block shading. This style is influenced by early video games.`,
+
+  art_deco: `Art Deco (1920s-1930s) represents luxury and progress through bold geometric shapes, symmetrical patterns, stepped forms, streamlined aerodynamic elements, high contrast colors, metallic accents, simplified elongated figures, sunburst and chevron patterns, exotic influenced motifs, and geometric sans-serif typography. It combines modernism with fine craftsmanship.`,
+
+  cyberpunk: `Cyberpunk visualizes a high-tech dystopian future with neon lighting against dark urban environments, holographic displays, a mix of advanced technology with decay, human augmentation elements, corporate advertising, rain-slicked reflective streets, dense vertical architecture, retrofitted technology, strong color contrasts, and visible technological components.`,
+
+  impressionist: `Impressionism focuses on capturing light and atmosphere with visible loose brushstrokes, emphasis on changing light qualities, vibrant unmixed colors placed side by side, everyday scenes, open brushwork, lack of black (shadows in color), soft edges, momentary effects over permanent reality, outdoor settings, and atmospheric perspective.`,
+
+  vaporwave: `Vaporwave is a retrofuturistic aesthetic featuring pink and blue/teal color schemes, glitch effects, 1980s-90s computing references, classical statuary, Japanese characters, early 3D rendering, retro consumer electronics, tropical elements, Windows interface elements, and VHS quality degradation. It's deliberately nostalgic, surreal, and often ironic.`,
+
+  isometric: `Isometric design presents 3D-like perspective without distortion using 30-degree angles, no vanishing points, consistent scale regardless of position, flat coloring with simple shadows, grid-based layout, visibility of multiple sides simultaneously, clean geometric forms, no atmospheric perspective, and often "cut-away" views of spaces.`,
+
+  ukiyo_e: `Ukiyo-e is a traditional Japanese woodblock print style with flat areas of solid color, bold black outlines, limited but distinctive color palette, stylized natural elements, distinctive facial features, theatrical poses, asymmetrical compositions, multiple perspectives, seasonal themes, and traditional Japanese cultural elements.`,
+
+  low_poly: `Low poly style uses minimal polygons for 3D-looking imagery with faceted surfaces, flat color within each polygon, hard edges between faces, simplified representations of complex forms, geometric approach to organic shapes, strategic light and shadow, limited color palette, clean compositions, minimal texturing, and an angular aesthetic even for rounded objects.`
+};
+
+// Templates for each style
+const imageStyleTemplates = {
+  photorealistic: {
+    systemPrompt: `You are an expert in writing prompts for photorealistic Twitter-optimized AI art generation. You excel at creating lifelike, highly detailed visual descriptions that work well in social media feeds. Focus on realistic lighting, textures, and compositions that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "photorealistic",
+      "photorealistic",
+      styleDescriptions.photorealistic
+    )
+  },
+
+  watercolor: {
+    systemPrompt: `You are an expert in writing prompts for watercolor-style Twitter-optimized AI art generation. You excel at creating soft, fluid, and transparent visual descriptions with characteristic watercolor aesthetics that work well in social media feeds. Focus on gentle color blending, visible paper texture, and soft edges that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "watercolor",
+      "watercolor",
+      styleDescriptions.watercolor
+    )
+  },
+
+  pixel_art: {
+    systemPrompt: `You are an expert in writing prompts for pixel art Twitter-optimized AI art generation. You excel at creating retro, low-resolution visual descriptions with limited color palettes that work well in social media feeds. Focus on blocky shapes, limited detail, and nostalgic gaming aesthetics that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "pixel art",
+      "pixel art",
+      styleDescriptions.pixel_art
+    )
+  },
+
+  art_deco: {
+    systemPrompt: `You are an expert in writing prompts for Art Deco Twitter-optimized AI art generation. You excel at creating bold, geometric, and luxurious visual descriptions with characteristic 1920s-1930s aesthetics that work well in social media feeds. Focus on symmetrical patterns, bold lines, metallic accents, and glamorous elements that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "art deco",
+      "Art Deco",
+      styleDescriptions.art_deco
+    )
+  },
+
+  cyberpunk: {
+    systemPrompt: `You are an expert in writing prompts for cyberpunk Twitter-optimized AI art generation. You excel at creating high-tech, dystopian, neon-lit visual descriptions with futuristic urban aesthetics that work well in social media feeds. Focus on holographic elements, cyber enhancements, rain-slicked streets, and stark contrasts that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "cyberpunk",
+      "cyberpunk",
+      styleDescriptions.cyberpunk
+    )
+  },
+
+  impressionist: {
+    systemPrompt: `You are an expert in writing prompts for impressionist Twitter-optimized AI art generation. You excel at creating light-filled, brushstroke-focused visual descriptions that capture moments and atmospheres in the style of Monet, Renoir, and Degas, which work well in social media feeds. Focus on visible brushwork, color vibrance, outdoor scenes, and light effects that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "impressionist",
+      "impressionist",
+      styleDescriptions.impressionist
+    )
+  },
+
+  vaporwave: {
+    systemPrompt: `You are an expert in writing prompts for vaporwave Twitter-optimized AI art generation. You excel at creating retro-futuristic, 80s/90s-inspired visual descriptions with neon aesthetics and nostalgic digital elements that work well in social media feeds. Focus on glitch effects, pink and blue color schemes, retro computer graphics, and surreal compositions that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "vaporwave",
+      "vaporwave",
+      styleDescriptions.vaporwave
+    )
+  },
+
+  isometric: {
+    systemPrompt: `You are an expert in writing prompts for isometric Twitter-optimized AI art generation. You excel at creating 3D-like visual descriptions with a specific 30-degree angle perspective and no vanishing points that work well in social media feeds. Focus on architectural elements, gaming-inspired scenes, and clean geometric compositions that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "isometric",
+      "isometric",
+      styleDescriptions.isometric
+    )
+  },
+
+  ukiyo_e: {
+    systemPrompt: `You are an expert in writing prompts for Ukiyo-e Twitter-optimized AI art generation. You excel at creating Japanese woodblock print-style visual descriptions with flat perspectives, bold outlines, and traditional Japanese aesthetics that work well in social media feeds. Focus on nature elements, figures in traditional clothing, and iconic compositions inspired by artists like Hokusai and Hiroshige that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "ukiyo-e",
+      "Ukiyo-e",
+      styleDescriptions.ukiyo_e
+    )
+  },
+
+  low_poly: {
+    systemPrompt: `You are an expert in writing prompts for low poly Twitter-optimized AI art generation. You excel at creating modern, geometric visual descriptions with faceted surfaces and a distinctive 3D rendered look that work well in social media feeds. Focus on angular shapes, simplified forms, and clean compositions with limited detail that communicate clearly even when viewed on small mobile screens. Your output should only contain the description of the image contents, but NOT an instruction like "create an image that..."`,
+
+    getPromptInput: (content) => generateImagePromptInput(
+      content,
+      "low poly",
+      "low poly",
+      styleDescriptions.low_poly
+    )
+  }
+};
 
 export const messageHandlerTemplate =
     // {{goals}}
@@ -91,7 +295,6 @@ export class DirectClient {
 
         this.app.use(bodyParser.json());
         this.app.use(bodyParser.urlencoded({ extended: true }));
-
         // Serve both uploads and generated images
         this.app.use(
             "/media/uploads",
@@ -328,22 +531,79 @@ export class DirectClient {
                     res.status(404).send("Agent not found");
                     return;
                 }
+                const description = req.body.description;
+                const logoPrompt = description;
 
-                const images = await generateImage({ ...req.body }, agent);
-                const imagesRes: { image: string; caption: string }[] = [];
-                if (images.data && images.data.length > 0) {
-                    for (let i = 0; i < images.data.length; i++) {
-                        const caption = await generateCaption(
-                            { imageUrl: images.data[i] },
-                            agent
-                        );
-                        imagesRes.push({
-                            image: images.data[i],
-                            caption: caption.title,
-                        });
-                    }
+                const images = await generateImage(
+                    {
+                        prompt: logoPrompt,
+                        width: 512,
+                        height: 512,
+                        count: 1,
+                    },
+                    agent
+                );
+
+                res.json({ images });
+            }
+        );
+
+        this.app.post(
+            "/:agentId/twitter-post-image",
+            async (req: express.Request, res: express.Response) => {
+                const agentId = req.params.agentId;
+                const postId = req.body.postId;
+                const planId = req.body.planId;
+                const agent = this.agents.get(agentId);
+                const imageStyle = req.body.style;
+                const extractedStyle = imageStyleTemplates[imageStyle];
+                if (!agent) {
+                    res.status(404).send("Agent not found");
+                    return;
                 }
-                res.json({ images: imagesRes });
+
+                const CONTENT = req.body.description;
+                const IMAGE_SYSTEM_PROMPT = extractedStyle.systemPrompt
+
+                const IMAGE_PROMPT_INPUT = extractedStyle.getPromptInput(CONTENT);
+                const imagePrompt = await generateText({
+                    runtime: agent,
+                    context: IMAGE_PROMPT_INPUT,
+                    modelClass: ModelClass.MEDIUM,
+                    customSystemPrompt: IMAGE_SYSTEM_PROMPT,
+                });
+
+                const images = await generateImage(
+                    {
+                        prompt: imagePrompt,
+                        width: 1280,
+                        height: 704,
+                        count: 1,
+                    },
+                    agent
+                );
+                if (images.success && images.data && images.data.length > 0) {
+                    elizaLogger.log(
+                        "Image generation successful, number of images:",
+                        images.data.length
+                    );
+                    const image = images.data[0];
+
+                    // Save the image and get filepath
+                    const filename = `${planId}_${postId}_${Date.now()}`;
+
+                    // Choose save function based on image data format
+                    const filepath = saveBase64Image(image, filename);
+
+                    res.json({ filepath });
+                } else {
+                    res.json({
+                        error: "Image generation failed or returned no data.",
+                    });
+                    elizaLogger.error(
+                        "Image generation failed or returned no data."
+                    );
+                }
             }
         );
 

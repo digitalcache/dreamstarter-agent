@@ -1063,28 +1063,33 @@ async function uploadMedia(
         return mediaId;
     } else {
         // Handle image upload
-        const form = new FormData();
-        form.append(
-            'media',
-            new Blob([mediaData], {
-                type: mediaType,
-            }),
-        );
 
-        const response = await fetch(uploadUrl, {
-            method: 'POST',
-            headers,
-            body: form,
-        });
+        const form = new URLSearchParams();
 
-        await updateCookieJar(auth.cookieJar(), response.headers);
+        // Convert binary data to base64 if it's not already
+        const base64Data =
+            mediaData instanceof Uint8Array
+                ? Buffer.from(mediaData).toString('base64')
+                : mediaData;
 
-        if (!response.ok) {
-            throw new Error(await response.text());
+        form.append('media', base64Data);
+
+        try {
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                headers,
+                body: form,
+            });
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+            await updateCookieJar(auth.cookieJar(), response.headers);
+            const data: MediaUploadResponse = await response.json();
+            return data.media_id_string;
+        } catch (error) {
+            console.log('error', error);
+            return '';
         }
-
-        const data: MediaUploadResponse = await response.json();
-        return data.media_id_string;
     }
 
     // Function to upload video in chunks
