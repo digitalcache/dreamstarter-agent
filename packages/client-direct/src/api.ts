@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage,
     limits: {
-        fileSize: 5 * 1024 * 1024,
+        fileSize: 20 * 1024 * 1024,
     },
 });
 
@@ -89,11 +89,11 @@ export function createApiRouter(
     };
 
     router.use(cors(corsOptions));
-    router.use(bodyParser.json({ limit: "5Mb" }));
-    router.use(bodyParser.urlencoded({ extended: true }));
+    router.use(bodyParser.json({ limit: "20MB" }));
+    router.use(bodyParser.urlencoded({ extended: true, limit: "20MB" }));
     router.use(
         express.json({
-            limit: "5Mb",
+            limit: "20MB",
         })
     );
 
