@@ -89,11 +89,11 @@ export function createApiRouter(
     };
 
     router.use(cors(corsOptions));
-    router.use(bodyParser.json({ limit: "5mb" }));
+    router.use(bodyParser.json({ limit: "5Mb" }));
     router.use(bodyParser.urlencoded({ extended: true }));
     router.use(
         express.json({
-            limit: "5mb",
+            limit: "5Mb",
         })
     );
 
