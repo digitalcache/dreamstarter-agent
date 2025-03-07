@@ -7,7 +7,6 @@ import * as path from "path";
 import {
     AgentRuntime,
     elizaLogger,
-    getEnvVariable,
     validateCharacterConfig,
 } from "@elizaos/core";
 
@@ -30,7 +29,12 @@ const storage = multer.diskStorage({
     },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+    storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024,
+    },
+});
 
 export function saveBase64Image(base64Data: string, filename: string): string {
     const imageDir = path.join(process.cwd(), "generatedImages");
@@ -85,11 +89,11 @@ export function createApiRouter(
     };
 
     router.use(cors(corsOptions));
-    router.use(bodyParser.json());
+    router.use(bodyParser.json({ limit: "5mb" }));
     router.use(bodyParser.urlencoded({ extended: true }));
     router.use(
         express.json({
-            limit: getEnvVariable("EXPRESS_MAX_PAYLOAD") || "5mb",
+            limit: "5mb",
         })
     );
 
