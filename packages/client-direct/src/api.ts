@@ -89,7 +89,7 @@ export function createApiRouter(
     router.use(bodyParser.urlencoded({ extended: true }));
     router.use(
         express.json({
-            limit: getEnvVariable("EXPRESS_MAX_PAYLOAD") || "100kb",
+            limit: getEnvVariable("EXPRESS_MAX_PAYLOAD") || "5mb",
         })
     );
 
