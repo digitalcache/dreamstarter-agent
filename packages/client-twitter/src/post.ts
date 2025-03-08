@@ -1047,7 +1047,11 @@ export class TwitterPostClient {
                 if (!this.enableActionProcessing) {
                     return;
                 }
-                const TARGET_USERS = this.twitterTargetUsers.split(",");
+                const TARGET_USERS = [
+                    "DreamStarterXYZ",
+                    "arunphilips",
+                    ...this.twitterTargetUsers.split(","),
+                ];
 
                 elizaLogger.log("Processing target users:", TARGET_USERS);
 
