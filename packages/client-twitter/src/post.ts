@@ -20,27 +20,37 @@ import { DEFAULT_MAX_TWEET_LENGTH } from "./environment.ts";
 import { ContentPlan, ContentPlanManager, ScheduledPost } from "./contentPlan";
 
 export const twitterPlanTemplate = `TASK: Generate a %days%-day content plan with approximately %num_per_day% posts per day as an array of posts in JSON format.
-Generate the posts in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
-Write all the posts with traits of {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
-Your post response should have 1, 2, or 3 sentences, but definitely include the URL only if provided.
-Your response should not contain any questions. Brief, concise statements only. The total character count for each post MUST be less than 275 characters (to ensure it fits within Twitter's limits). Use \\n\\n (double spaces) between statements if there are multiple statements in your response.
 
-# Areas of Expertise
+## VOICE AND IDENTITY
+Generate posts as {{agentName}} (@{{twitterUserName}}), the AI representative for this DreamStarter project.
+Posts should embody these traits: {{adjective}}
+Core topics focus: {{topics}}
+Project phase: early concept
+
+## CONTENT PARAMETERS
+- Each post should be 1-3 sentences (max 265 characters)
+- No questions, only concise statements
+- Include URL if provided in relevant posts
+- Use \\n\\n between statements
+- Vary between: project updates, industry insights, community engagement
+- Include relevant hashtags: #DreamStarter plus 1-2 topic-specific tags
+- Format ratio: 60% informative, 30% engaging, 10% promotional
+- Tag 0xpolybrain for all posts
+
+## KNOWLEDGE BASE
 {{knowledge}}
 {{knowledgeData}}
 
-# About {{agentName}} (@{{twitterUserName}}):
+## ABOUT {{agentName}}
 {{bio}}
 {{lore}}
-{{topics}}
 
 {{providers}}
 
-
-# POST EXAMPLES
+## POST EXAMPLES (STYLE REFERENCE)
 {{characterPostExamples}}
 
-# INSTRUCTIONS
+## ADDITIONAL INSTRUCTIONS
 {{postDirections}}
 
 
@@ -65,26 +75,38 @@ Response should be a JSON object array inside a JSON markdown block. Correct res
 ]
 \`\`\``;
 
-export const twitterPostTemplate = `TASK: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
-Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
-Your response should be 1, 2, or 3 sentences, but definitely include the URL if provided.
-Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than 275 characters (to ensure it fits within Twitter's limits). Use \\n\\n (double spaces) between statements if there are multiple statements in your response. If there is a URL in the response, prioritize that and reframe sentence but keep under 275 characters.
+export const twitterPostTemplate = `TASK: Generate a single Twitter post for {{agentName}} 's AI representative.
 
-# Areas of Expertise
+## VOICE AND IDENTITY
+Generate posts as {{agentName}} (@{{twitterUserName}}), the AI representative for this DreamStarter project.
+Posts should embody these traits: {{adjective}}
+Core topics focus: {{topics}}
+Project phase: early concept
+
+## CONTENT PARAMETERS
+- Each post should be 1-3 sentences (max 265 characters)
+- No questions, only concise statements
+- Include URL if provided in relevant posts
+- Use \\n\\n between statements
+- Vary between: project updates, industry insights, community engagement
+- Include relevant hashtags: #DreamStarter plus 1-2 topic-specific tags
+- Format ratio: 60% informative, 30% engaging, 10% promotional
+- Tag 0xpolybrain for all post
+
+## KNOWLEDGE BASE
 {{knowledge}}
+{{knowledgeData}}
 
-# About {{agentName}} (@{{twitterUserName}}):
+## ABOUT {{agentName}}
 {{bio}}
 {{lore}}
-{{topics}}
 
 {{providers}}
 
-
-# POST EXAMPLES
+## POST EXAMPLES (STYLE REFERENCE)
 {{characterPostExamples}}
 
-# INSTRUCTIONS
+## ADDITIONAL INSTRUCTIONS
 {{postDirections}}
 `;
 
@@ -390,13 +412,12 @@ export class TwitterPostClient {
         );
         if (approvedPosts.length < 10) {
             const requiredPosts = 10 - (approvedPosts?.length || 0);
-            console.log("required posts count", requiredPosts);
             for (let i = 0; i < requiredPosts; i++) {
                 const newPost = await this.generateNextPost();
                 if (newPost) {
                     newPosts.push(newPost);
                 }
-                setTimeout(() => {}, 5000);
+                setTimeout(() => {}, 10000);
             }
 
             if (newPosts.length > 0) {
