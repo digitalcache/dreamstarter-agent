@@ -273,7 +273,6 @@ export class TwitterPostClient {
             if (activePlan) {
                 this.currentPlanId = activePlan.id;
             } else {
-                console.log(new Date());
                 const plan = await this.generateNewPlan(new Date());
                 console.log("PLAN", plan);
                 this.currentPlanId = plan.id;
@@ -341,10 +340,57 @@ export class TwitterPostClient {
                     new Date(b.scheduledTime).getTime()
             );
 
-        if (!sortedPosts || sortedPosts.length < 10) {
-            const requiredPosts = 10 - (sortedPosts?.length || 0);
+        const requiredPosts = 10 - (sortedPosts?.length || 0);
+        const newPosts = [];
+        for (let i = 0; i < requiredPosts; i++) {
+            const newPost = await this.generateNextPost();
+            if (newPost) {
+                newPosts.push(newPost);
+            }
+            setTimeout(() => {}, 10000);
+        }
 
-            const newPosts = [];
+        // Add new posts to the plan
+        if (newPosts.length > 0) {
+            // Re-sort all posts including new ones
+            sortedPosts = [
+                ...sortedPosts,
+                ...newPosts.filter(
+                    (post) =>
+                        post.status === "approved" &&
+                        new Date(post.scheduledTime) > now
+                ),
+            ]
+                .filter(
+                    (post) =>
+                        post.status === "approved" &&
+                        new Date(post.scheduledTime) > now
+                )
+                .sort(
+                    (a, b) =>
+                        new Date(a.scheduledTime).getTime() -
+                        new Date(b.scheduledTime).getTime()
+                );
+        }
+
+        return sortedPosts[0];
+    }
+
+    async recalculatePostSchedule(
+        plan: ContentPlan,
+        newInterval: number
+    ): Promise<void> {
+        if (!plan) return;
+        const now = new Date();
+        const updatedPlan = structuredClone(plan);
+        const newPosts = [];
+        const approvedPosts = plan.posts.filter(
+            (post) =>
+                post.status === "approved" && new Date(post.scheduledTime) > now
+        );
+        if (approvedPosts.length < 10) {
+            const requiredPosts = 10 - (approvedPosts?.length || 0);
+            console.log("required posts count", requiredPosts);
             for (let i = 0; i < requiredPosts; i++) {
                 const newPost = await this.generateNextPost();
                 if (newPost) {
@@ -353,11 +399,9 @@ export class TwitterPostClient {
                 setTimeout(() => {}, 5000);
             }
 
-            // Add new posts to the plan
             if (newPosts.length > 0) {
-                // Re-sort all posts including new ones
-                sortedPosts = [
-                    ...sortedPosts,
+                updatedPlan.posts = [
+                    ...updatedPlan.posts,
                     ...newPosts.filter(
                         (post) =>
                             post.status === "approved" &&
@@ -377,42 +421,29 @@ export class TwitterPostClient {
             }
         }
 
-        return sortedPosts[0];
-    }
+        updatedPlan.posts
+            .filter(
+                (post) =>
+                    post.status === "approved" &&
+                    new Date(post.scheduledTime) > now
+            )
+            .sort(
+                (a, b) =>
+                    new Date(a.scheduledTime).getTime() -
+                    new Date(b.scheduledTime).getTime()
+            );
 
-    async recalculatePostSchedule(
-        plan: ContentPlan,
-        newInterval: number
-    ): Promise<void> {
-        if (!plan || !plan.posts || plan.posts.length === 0) return;
-
-        const updatedPlan = structuredClone(plan);
-        updatedPlan.posts.sort((a, b) => {
-            const timeA = new Date(a.scheduledTime).getTime();
-            const timeB = new Date(b.scheduledTime).getTime();
-            return timeA - timeB;
-        });
-        const now = new Date();
-        let baseTime: Date;
-        const firstPostTime = new Date(updatedPlan.posts[0].scheduledTime);
-        if (firstPostTime < now) {
-            baseTime = now;
-        } else {
-            baseTime = firstPostTime;
-        }
-        const isStartingFromNow = firstPostTime < now;
+        const baseTime = new Date(updatedPlan.posts[0].scheduledTime);
+        const isStartingFromNow = baseTime < now;
 
         for (let i = 0; i < updatedPlan.posts.length; i++) {
             if (i === 0 && !isStartingFromNow) return;
             const newScheduledTime = new Date(baseTime);
             newScheduledTime.setMinutes(
-                newScheduledTime.getMinutes() +
-                    (isStartingFromNow ? i : i - 1) * newInterval
+                newScheduledTime.getMinutes() + i * newInterval
             );
 
-            if (newScheduledTime > now) {
-                updatedPlan.posts[i].scheduledTime = newScheduledTime;
-            }
+            updatedPlan.posts[i].scheduledTime = newScheduledTime;
         }
 
         await this.contentPlanManager.storePlan(updatedPlan);
@@ -478,23 +509,19 @@ export class TwitterPostClient {
         const plan = await this.contentPlanManager.getPlan(this.currentPlanId);
         if (!plan) return;
 
-        // Check if we need to generate more posts
-        const plannedTotal = plan.metadata?.plannedTotalPosts || 0;
-        if (plan.posts.length < plannedTotal) {
-            const nextPost = await this.contentPlanManager.generateNextPost(
-                plan,
-                this.postInterval
+        const nextPost = await this.contentPlanManager.generateNextPost(
+            plan,
+            this.postInterval
+        );
+        if (nextPost) {
+            // Add the new post to the plan
+            plan.posts.push(nextPost);
+            plan.metadata.totalPosts = plan.posts.length;
+            await this.contentPlanManager.storePlan(plan);
+            elizaLogger.log(
+                `Generated next post for time: ${nextPost.scheduledTime}`
             );
-            if (nextPost) {
-                // Add the new post to the plan
-                plan.posts.push(nextPost);
-                plan.metadata.totalPosts = plan.posts.length;
-                await this.contentPlanManager.storePlan(plan);
-                elizaLogger.log(
-                    `Generated next post for time: ${nextPost.scheduledTime}`
-                );
-                return nextPost;
-            }
+            return nextPost;
         }
     }
 

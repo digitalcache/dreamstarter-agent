@@ -20,7 +20,7 @@ export interface ScheduledPost {
     localPath?: Array<{
         type: string;
         url: string;
-    }>
+    }>;
 }
 
 export interface ContentPlan {
@@ -135,9 +135,16 @@ export class ContentPlanManager {
         planData.forEach((dayPlan, index) => {
             const postContent = dayPlan.content;
             const scheduledTime = new Date(currentDate);
-            scheduledTime.setMinutes(
-                scheduledTime.getMinutes() + index * minInterval
-            );
+            if (index === 0) {
+                scheduledTime.setMinutes(
+                    scheduledTime.getMinutes() +
+                        Math.floor(Math.random() * 26 + 5)
+                );
+            } else {
+                scheduledTime.setMinutes(
+                    scheduledTime.getMinutes() + index * minInterval
+                );
+            }
 
             posts.push({
                 id: `post-${scheduledTime.getTime()}-${Math.random().toString(36).substring(7)}`,
@@ -160,21 +167,27 @@ export class ContentPlanManager {
         postInterval: number
     ): Promise<ScheduledPost | null> {
         if (!plan) return null;
-
-        const lastPost = plan.posts[plan.posts.length - 1];
-        if (!lastPost) return null;
-
         const now = new Date();
-        let nextPostTime = new Date(lastPost.scheduledTime);
-        nextPostTime.setMinutes(nextPostTime.getMinutes() + postInterval);
 
-        // If the calculated next post time is in the past, use current time as base
-        if (nextPostTime < now) {
-            nextPostTime = new Date(now);
-            nextPostTime.setMinutes(now.getMinutes() + postInterval);
+        const sortedPosts = plan.posts
+            .filter(
+                (post) =>
+                    post.status === "approved" &&
+                    new Date(post.scheduledTime) > now
+            )
+            .sort(
+                (a, b) =>
+                    new Date(a.scheduledTime).getTime() -
+                    new Date(b.scheduledTime).getTime()
+            );
+        const lastPost = sortedPosts[sortedPosts.length - 1];
+        let nextPostTime = now;
+
+        if (lastPost) {
+            nextPostTime = new Date(lastPost.scheduledTime);
         }
 
-        if (nextPostTime > plan.endDate) return null;
+        nextPostTime.setMinutes(nextPostTime.getMinutes() + postInterval);
 
         return await this.generatePost(nextPostTime);
     }
