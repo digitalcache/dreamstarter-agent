@@ -266,6 +266,47 @@ export function createApiRouter(
         }
     );
 
+    router.post("/agents/:agentId/new-tweets", async (req, res) => {
+        const agentId = req.params.agentId;
+        const agent = agents.get(agentId);
+        const planId = req.body.planId;
+        if (!agent) {
+            res.status(404).json({ error: "Agent not found" });
+            return;
+        }
+
+        const twitterClient = agent.clients["twitter"];
+
+        if (twitterClient && twitterClient.post.currentPlanId) {
+            const postManager = twitterClient.post;
+            const contentManager = postManager.contentPlanManager;
+
+            try {
+                await contentManager.refreshNewPosts(
+                    planId,
+                    postManager.postInterval
+                );
+
+                res.json({
+                    status: "success",
+                    message: "New Posts generated successfully",
+                });
+            } catch (error) {
+                console.error("Error generating posts:", error);
+                res.status(500).json({
+                    status: "failed",
+                    error: "Error generating posts",
+                });
+            }
+            return;
+        }
+
+        res.status(404).json({
+            status: "failed",
+            error: "Twitter client or plan not found",
+        });
+    });
+
     router.delete("/agents/:agentId/remove-tweet-image", async (req, res) => {
         const agentId = req.params.agentId;
         const agent = agents.get(agentId);

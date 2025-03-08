@@ -91,6 +91,68 @@ export class ContentPlanManager {
         );
     }
 
+    async refreshNewPosts(planId, minInterval: number = 480): Promise<void> {
+        const plan = await this.getPlan(planId);
+        if (!plan) throw new Error("Plan not found");
+
+        const state = await this.runtime.composeState(
+            {
+                userId: this.runtime.agentId,
+                roomId: this.runtime.agentId,
+                agentId: this.runtime.agentId,
+                content: {
+                    text: this.runtime.character.topics.join(", "),
+                    action: "TWEET",
+                },
+            },
+            {
+                twitterUserName: this.client.profile.username,
+            }
+        );
+
+        const context = composeContext({
+            state,
+            template: twitterPlanTemplate
+                .replace("%days%", "1")
+                .replace("%num_per_day%", "10"),
+        });
+
+        const planData = await generateObjectArray({
+            runtime: this.runtime,
+            context,
+            modelClass: ModelClass.LARGE,
+        });
+
+        const posts: ScheduledPost[] = [];
+
+        const now = new Date();
+
+        planData.forEach((dayPlan, index) => {
+            const postContent = dayPlan.content;
+            const scheduledTime = new Date(now);
+            if (index === 0) {
+                scheduledTime.setMinutes(
+                    scheduledTime.getMinutes() +
+                        Math.floor(Math.random() * 26 + 5)
+                );
+            } else {
+                scheduledTime.setMinutes(
+                    scheduledTime.getMinutes() + index * minInterval
+                );
+            }
+
+            posts.push({
+                id: `post-${scheduledTime.getTime()}-${Math.random().toString(36).substring(7)}`,
+                content: postContent.text,
+                scheduledTime,
+                status: "approved",
+                topics: this.extractTopics(postContent.text),
+            });
+        });
+        plan.posts = posts;
+        await this.storePlan(plan);
+    }
+
     private async generateInitialPosts(
         startDate: Date,
         count: number,
