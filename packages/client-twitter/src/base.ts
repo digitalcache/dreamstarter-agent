@@ -156,67 +156,51 @@ export class ClientBase extends EventEmitter {
             this.runtime.character.style.post.join();
     }
 
-    async init(email, username, password) {
-        let retries = this.twitterConfig.TWITTER_RETRY_LIMIT;
-        const twitter2faSecret = this.twitterConfig.TWITTER_2FA_SECRET;
-
+    async init(
+        username,
+        appKey,
+        appSecret,
+        accessToken,
+        accessSecret,
+        oauthVerifier
+    ) {
         if (!username) {
             throw new Error("Twitter username not configured");
         }
 
-        const cachedCookies = await this.getCachedCookies(username);
-
-        if (cachedCookies) {
-            elizaLogger.info("Using cached cookies");
-            await this.setCookiesFromArray(cachedCookies);
-        }
-
         elizaLogger.log("Waiting for Twitter login");
-        while (retries > 0) {
-            try {
+        try {
+            if (await this.twitterClient.isLoggedIn()) {
+                // cookies are valid, no login required
+                elizaLogger.info("Successfully logged in.");
+            } else {
+                await this.twitterClient.login(
+                    username,
+                    appKey,
+                    appSecret,
+                    accessToken,
+                    accessSecret,
+                    oauthVerifier
+                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
                 if (await this.twitterClient.isLoggedIn()) {
-                    // cookies are valid, no login required
+                    // fresh login, store new cookies
                     elizaLogger.info("Successfully logged in.");
-                    break;
-                } else {
-                    await this.twitterClient.login(
+                    // elizaLogger.info("Caching cookies");
+                    await this.cacheCookies(
                         username,
-                        password,
-                        email,
-                        twitter2faSecret
+                        await this.twitterClient.getCookies()
                     );
-                    if (await this.twitterClient.isLoggedIn()) {
-                        // fresh login, store new cookies
-                        elizaLogger.info("Successfully logged in.");
-                        elizaLogger.info("Caching cookies");
-                        await this.cacheCookies(
-                            username,
-                            await this.twitterClient.getCookies()
-                        );
-                        break;
-                    }
                 }
-            } catch (error) {
-                console.log(error);
-                elizaLogger.error(
-                    `Invalid credentials. Please check your email, username and password.`
-                );
             }
-
-            retries--;
+        } catch (error) {
+            console.log(error);
             elizaLogger.error(
-                `Failed to login to Twitter. Retrying... (${retries} attempts left)`
+                `Invalid credentials. Please check your email, username and password.`
             );
-
-            if (retries === 0) {
-                elizaLogger.error(
-                    "Max retries reached. Exiting login process."
-                );
-                return false;
-            }
-
-            await new Promise((resolve) => setTimeout(resolve, 2000));
         }
+
         // Initialize Twitter profile
         this.profile = await this.fetchProfile(username);
 
@@ -259,10 +243,12 @@ export class ClientBase extends EventEmitter {
         count: number,
         following?: boolean
     ): Promise<Tweet[]> {
-        elizaLogger.debug("fetching home timeline");
-        const homeTimeline = following
-            ? await this.twitterClient.fetchFollowingTimeline(count, [])
-            : await this.twitterClient.fetchHomeTimeline(count, []);
+        console.log("fetching home timeline");
+        console.log("following is", following, count);
+        const homeTimeline = await this.twitterClient.fetchFollowingTimeline(
+            count,
+            []
+        );
 
         elizaLogger.debug(homeTimeline, { depth: Infinity });
         const processedTimeline = homeTimeline

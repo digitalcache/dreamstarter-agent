@@ -413,12 +413,16 @@ export async function initializeClients(
     }
 
     if (clientTypes.includes(Clients.TWITTER)) {
+        const appKey = process.env.TWITTER_API_KEY;
+        const appSecret = process.env.TWITTER_API_SECRET_KEY;
         const { loginSuccess, manager: twitterClient }: any =
             await TwitterClientInterface.startExternal(
                 runtime,
-                character.settings?.secrets?.TWITTER_EMAIL,
-                character.settings?.secrets?.TWITTER_USERNAME,
-                decryptPassword(character.settings?.secrets?.TWITTER_PASSWORD)
+                appKey,
+                appSecret,
+                character.settings?.secrets?.TWITTER_ACCESS_TOKEN,
+                character.settings?.secrets?.TWITTER_ACCESS_TOKEN_SECRET,
+                character.settings?.secrets?.TWITTER_AUTH_VERIFIER
             );
         if (!loginSuccess) {
             twitterFailed = true;

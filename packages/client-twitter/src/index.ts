@@ -26,18 +26,24 @@ export type TwitterClient = {
     /** Start external client connection */
     startExternal: (
         runtime: IAgentRuntime,
-        email: string,
         username: string,
-        password: string
+        appKey: string,
+        appSecret: string,
+        accessToken: string,
+        accessSecret: string,
+        oauthVerifier: string
     ) => Promise<unknown>;
 };
 
 export const TwitterClientInterface: TwitterClient = {
     async startExternal(
         runtime: IAgentRuntime,
-        email: string,
-        username: string,
-        password: string
+        username,
+        appKey: string,
+        appSecret: string,
+        accessToken: string,
+        accessSecret: string,
+        oauthVerifier: string
     ) {
         // await validateTwitterConfig(runtime);
 
@@ -46,7 +52,14 @@ export const TwitterClientInterface: TwitterClient = {
             await validateTwitterConfig(runtime);
         const manager = new TwitterManager(runtime, twitterConfig);
 
-        const status = await manager.client.init(email, username, password);
+        const status = await manager.client.init(
+            username,
+            appKey,
+            appSecret,
+            accessToken,
+            accessSecret,
+            oauthVerifier
+        );
 
         // await manager.post.start();
 
